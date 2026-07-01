@@ -1,0 +1,46 @@
+# --- Secrets / local config (never commit) ---
+*.secret
+*.key
+*.pem
+.env
+.env.*
+imagesync.config.json
+pairing.json
+
+# --- Bun / Node (relay) ---
+node_modules/
+bun.lockb
+dist/
+build/
+*.log
+.DS_Store
+
+# Compiled relay binary
+relay/imagesync-relay
+relay/*.bin
+
+# --- Flutter / Dart (app) ---
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.packages
+app/build/
+app/.pub-cache/
+app/.pub/
+app/**/generated_plugin_registrant.*
+app/ios/Flutter/Flutter.framework
+app/ios/Flutter/Flutter.podspec
+*.iml
+
+# Android build/keystore
+app/android/.gradle/
+app/android/local.properties
+app/android/key.properties
+app/android/app/*.jks
+app/android/app/*.keystore
+app/**/*.apk
+
+# IDE
+.idea/
+.vscode/
+*.swp

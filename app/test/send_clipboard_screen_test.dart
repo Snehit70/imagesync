@@ -1,0 +1,81 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:imagesync/src/foreground/send_clipboard_screen.dart';
+import 'package:imagesync/src/share/share_payload.dart';
+import 'package:imagesync/src/share/share_publisher.dart';
+
+void main() {
+  testWidgets('publishes clipboard text immediately when opened', (
+    tester,
+  ) async {
+    final publisher = FakeSharePublisher();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SendClipboardScreen(
+          clipboardReader: FakeClipboardReader('hello from phone'),
+          publisher: publisher,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Clipboard sent to laptop.'), findsOneWidget);
+    expect(publisher.published.single.text, 'hello from phone');
+  });
+
+  testWidgets('shows an empty clipboard message', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SendClipboardScreen(
+          clipboardReader: FakeClipboardReader(null),
+          publisher: FakeSharePublisher(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Clipboard is empty.'), findsOneWidget);
+  });
+
+  testWidgets('shows a share failure message', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SendClipboardScreen(
+          clipboardReader: const FakeClipboardReader('text'),
+          publisher: FakeSharePublisher(
+            result: const SharePublishResult.failed('Relay is offline.'),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Relay is offline.'), findsOneWidget);
+  });
+}
+
+class FakeSharePublisher implements ClipboardSharePublisher {
+  FakeSharePublisher({this.result = const SharePublishResult.published()});
+
+  final SharePublishResult result;
+  final List<SharePayload> published = [];
+
+  @override
+  Future<SharePublishResult> publish(SharePayload payload) async {
+    published.add(payload);
+    return result;
+  }
+}
+
+class FakeClipboardReader implements ClipboardReader {
+  const FakeClipboardReader(this.value);
+
+  final String? value;
+
+  @override
+  Future<String?> readText() async => value;
+}

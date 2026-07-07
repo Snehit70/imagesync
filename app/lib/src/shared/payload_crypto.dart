@@ -1,0 +1,81 @@
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:cryptography/cryptography.dart';
+
+import 'wire.dart';
+
+class PayloadCrypto {
+  PayloadCrypto({Random? random}) : _random = random ?? Random.secure();
+
+  static final _algorithm = AesGcm.with256bits();
+  static final _kdf = Pbkdf2(
+    macAlgorithm: Hmac.sha256(),
+    iterations: 200000,
+    bits: 256,
+  );
+  static final _salt = utf8.encode('imagesync-v1-pairing-secret');
+
+  final Random _random;
+
+  Future<PayloadFrame> encrypt({
+    required PayloadMetadata metadata,
+    required List<int> plaintext,
+    required String pairingSecret,
+  }) async {
+    final nonce = _randomBytes(12);
+    final nonceBase64 = base64Encode(nonce);
+    final frameMetadata = PayloadFrame(
+      type: metadata.type,
+      mime: metadata.mime,
+      origin: metadata.origin,
+      ts: metadata.ts,
+      nonce: nonceBase64,
+      payload: '',
+    );
+    final key = await _deriveKey(pairingSecret);
+    final secretBox = await _algorithm.encrypt(
+      plaintext,
+      secretKey: key,
+      nonce: nonce,
+      aad: utf8.encode(frameMetadata.associatedData()),
+    );
+
+    return frameMetadata.copyWith(
+      payload: base64Encode([...secretBox.cipherText, ...secretBox.mac.bytes]),
+    );
+  }
+
+  Future<List<int>> decrypt({
+    required PayloadFrame frame,
+    required String pairingSecret,
+  }) async {
+    final encrypted = base64Decode(frame.payload);
+    if (encrypted.length < 16) {
+      throw const FormatException('Payload ciphertext is too short.');
+    }
+    final key = await _deriveKey(pairingSecret);
+    final macOffset = encrypted.length - 16;
+    final box = SecretBox(
+      encrypted.sublist(0, macOffset),
+      nonce: base64Decode(frame.nonce),
+      mac: Mac(encrypted.sublist(macOffset)),
+    );
+    return _algorithm.decrypt(
+      box,
+      secretKey: key,
+      aad: utf8.encode(frame.associatedData()),
+    );
+  }
+
+  Future<SecretKey> _deriveKey(String pairingSecret) async {
+    return _kdf.deriveKey(
+      secretKey: SecretKey(utf8.encode(pairingSecret)),
+      nonce: _salt,
+    );
+  }
+
+  List<int> _randomBytes(int length) {
+    return List<int>.generate(length, (_) => _random.nextInt(256));
+  }
+}

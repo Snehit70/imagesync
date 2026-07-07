@@ -1,0 +1,19 @@
+{
+  "name": "imagesync",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build:relay": "bun build ./src/relay/cli.ts --compile --outfile dist/imagesync-relay"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "multicast-dns": "^7.2.5",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

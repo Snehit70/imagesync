@@ -6,10 +6,14 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../shared/payload_crypto.dart';
 import '../shared/wire.dart';
+import 'received_image_repository.dart';
 import 'received_text_repository.dart';
 
 /// Notification payload marking "tap to copy the latest received text".
 const copyLatestTextNotificationPayload = 'imagesync.copy-latest-text';
+
+/// Notification payload marking "tap to copy the latest received image".
+const copyLatestImageNotificationPayload = 'imagesync.copy-latest-image';
 
 abstract interface class AndroidClipboard {
   Future<void> writeText(String text);
@@ -21,6 +25,29 @@ class FlutterAndroidClipboard implements AndroidClipboard {
   @override
   Future<void> writeText(String text) {
     return Clipboard.setData(ClipboardData(text: text));
+  }
+}
+
+abstract interface class AndroidImageClipboard {
+  Future<void> writeImage(ReceivedImage image);
+}
+
+/// Writes an image to the Android clipboard through the `imagesync/clipboard`
+/// platform channel: the Kotlin side wraps the file in a FileProvider content
+/// URI and sets it as ClipData. The channel is hosted by MainActivity, so the
+/// write only succeeds from the UI isolate with the app in the foreground —
+/// the notification-tap path.
+class ChannelAndroidImageClipboard implements AndroidImageClipboard {
+  const ChannelAndroidImageClipboard();
+
+  static const _channel = MethodChannel('imagesync/clipboard');
+
+  @override
+  Future<void> writeImage(ReceivedImage image) {
+    return _channel.invokeMethod<void>('writeImage', {
+      'path': image.path,
+      'mime': image.mime,
+    });
   }
 }
 
@@ -58,7 +85,8 @@ class LocalPayloadNotifier implements PayloadNotifier {
   Future<void> showImageReady(String mime) async {
     await _show(
       title: 'ImageSync image ready',
-      body: '$mime received. Image clipboard support is pending.',
+      body: 'Tap to copy the received image ($mime).',
+      payload: copyLatestImageNotificationPayload,
     );
   }
 
@@ -119,14 +147,18 @@ class PayloadReceiver {
   const PayloadReceiver({
     required this.crypto,
     required this.clipboard,
+    required this.imageClipboard,
     required this.notifier,
     required this.receivedTextRepository,
+    required this.receivedImageRepository,
   });
 
   final PayloadCrypto crypto;
   final AndroidClipboard clipboard;
+  final AndroidImageClipboard imageClipboard;
   final PayloadNotifier notifier;
   final ReceivedTextRepository receivedTextRepository;
+  final ReceivedImageRepository receivedImageRepository;
 
   Future<PayloadReceiveResult> receive({
     required PayloadFrame frame,
@@ -149,9 +181,16 @@ class PayloadReceiver {
                 : 'Text received. Tap the notification to copy.',
           );
         case PayloadType.image:
+          final image = await receivedImageRepository.saveLatest(
+            plaintext,
+            frame.mime,
+          );
+          final copied = await _tryWriteImageClipboard(image);
           await notifier.showImageReady(frame.mime);
-          return const PayloadReceiveResult.received(
-            'Image received from laptop.',
+          return PayloadReceiveResult.received(
+            copied
+                ? 'Image copied from laptop.'
+                : 'Image received. Tap the notification to copy.',
           );
       }
     } on Object catch (error) {
@@ -164,6 +203,18 @@ class PayloadReceiver {
   Future<bool> _tryWriteClipboard(String text) async {
     try {
       await clipboard.writeText(text);
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
+  /// The image channel lives on the activity engine, so this always fails in
+  /// the service isolate today; kept as the same best-effort fast path as
+  /// text so a future always-available host makes it light up.
+  Future<bool> _tryWriteImageClipboard(ReceivedImage image) async {
+    try {
+      await imageClipboard.writeImage(image);
       return true;
     } on Object {
       return false;

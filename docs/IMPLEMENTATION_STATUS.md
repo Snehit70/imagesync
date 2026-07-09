@@ -31,12 +31,12 @@ This file is a live gap map against `docs/PRD.md`. It is not a replacement for t
 - Relay installs as a `systemd --user` service: `bun run install:relay` builds the binary, installs the unit from `packaging/systemd/`, and enables it; install/pairing docs in `docs/INSTALL.md`.
 - CI (`.github/workflows/ci.yml`) runs relay typecheck/tests and Flutter analyze/tests on push to main and PRs, and uploads the compiled relay binary and debug APK as artifacts.
 - Incoming text payloads are stored (latest-write-wins, secure storage) and their notification carries a copy payload: tapping it foregrounds the app, which writes the stored text to the Android clipboard (`ReceiveNotificationTapHandler`), covering warm taps and cold launches. The service-isolate clipboard write remains as a best-effort fast path since Android 10+/MIUI can reject background writes.
+- Incoming image payloads are persisted to app-private storage (latest-write-wins, `ReceivedImageRepository`) and their notification carries a copy payload: tapping it foregrounds the app, which writes the image to the Android clipboard through the `imagesync/clipboard` platform channel (`ClipData` + FileProvider content URI in `MainActivity`). `super_clipboard` stays out; the channel replaces it.
 - The wayfinder map (issue #9) tracks the route to v1 completion; issues #2-#8 are superseded.
 
 ## Not Done
 
 - Android mDNS relay discovery UI.
-- Android image clipboard write path. `super_clipboard` was removed because its current Gradle/CargoKit path failed against this Flutter/Gradle stack.
 - Android in-app logs/debug view.
 - Full two-direction manual E2E script.
 - Green full D1-D9 completion audit.

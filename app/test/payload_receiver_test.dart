@@ -1,23 +1,44 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:imagesync/src/receive/payload_receiver.dart';
+import 'package:imagesync/src/receive/received_image_repository.dart';
 import 'package:imagesync/src/receive/received_text_repository.dart';
 import 'package:imagesync/src/shared/payload_crypto.dart';
 import 'package:imagesync/src/shared/wire.dart';
 
 void main() {
+  late Directory tempDir;
+
+  setUp(() async {
+    tempDir = await Directory.systemTemp.createTemp('imagesync_receive_test');
+  });
+
+  tearDown(() async {
+    await tempDir.delete(recursive: true);
+  });
+
+  ReceivedImageRepository imageRepository(ReceivedPayloadStorage storage) {
+    return ReceivedImageRepository(
+      storage,
+      directoryProvider: () async => tempDir,
+    );
+  }
+
   test(
     'decrypts incoming text, stores it, and writes the Android clipboard',
     () async {
       final clipboard = FakeAndroidClipboard();
       final notifier = FakePayloadNotifier();
-      final storage = MemoryReceivedTextStorage();
+      final storage = MemoryReceivedPayloadStorage();
       final receiver = PayloadReceiver(
         crypto: PayloadCrypto(),
         clipboard: clipboard,
+        imageClipboard: FakeAndroidImageClipboard(),
         notifier: notifier,
         receivedTextRepository: ReceivedTextRepository(storage),
+        receivedImageRepository: imageRepository(storage),
       );
       final frame = await PayloadCrypto().encrypt(
         metadata: const PayloadMetadata(
@@ -50,12 +71,14 @@ void main() {
     'still receives when the background clipboard write is rejected',
     () async {
       final notifier = FakePayloadNotifier();
-      final storage = MemoryReceivedTextStorage();
+      final storage = MemoryReceivedPayloadStorage();
       final receiver = PayloadReceiver(
         crypto: PayloadCrypto(),
         clipboard: ThrowingAndroidClipboard(),
+        imageClipboard: FakeAndroidImageClipboard(),
         notifier: notifier,
         receivedTextRepository: ReceivedTextRepository(storage),
+        receivedImageRepository: imageRepository(storage),
       );
       final frame = await PayloadCrypto().encrypt(
         metadata: const PayloadMetadata(
@@ -84,17 +107,18 @@ void main() {
   );
 
   test(
-    'notifies for incoming image payloads without claiming clipboard support',
+    'stores an incoming image and writes it to the clipboard when allowed',
     () async {
-      final clipboard = FakeAndroidClipboard();
+      final imageClipboard = FakeAndroidImageClipboard();
       final notifier = FakePayloadNotifier();
+      final storage = MemoryReceivedPayloadStorage();
       final receiver = PayloadReceiver(
         crypto: PayloadCrypto(),
-        clipboard: clipboard,
+        clipboard: FakeAndroidClipboard(),
+        imageClipboard: imageClipboard,
         notifier: notifier,
-        receivedTextRepository: ReceivedTextRepository(
-          MemoryReceivedTextStorage(),
-        ),
+        receivedTextRepository: ReceivedTextRepository(storage),
+        receivedImageRepository: imageRepository(storage),
       );
       final frame = await PayloadCrypto().encrypt(
         metadata: const PayloadMetadata(
@@ -113,20 +137,63 @@ void main() {
       );
 
       expect(result.received, isTrue);
-      expect(result.message, 'Image received from laptop.');
-      expect(clipboard.text, isNull);
+      expect(result.message, 'Image copied from laptop.');
       expect(notifier.imageMimes.single, 'image/png');
+      final written = imageClipboard.images.single;
+      expect(written.mime, 'image/png');
+      expect(await File(written.path).readAsBytes(), [1, 2, 3, 4]);
+      final stored = await imageRepository(storage).loadLatest();
+      expect(stored?.path, written.path);
+    },
+  );
+
+  test(
+    'still receives an image when the background clipboard write is rejected',
+    () async {
+      final notifier = FakePayloadNotifier();
+      final storage = MemoryReceivedPayloadStorage();
+      final receiver = PayloadReceiver(
+        crypto: PayloadCrypto(),
+        clipboard: FakeAndroidClipboard(),
+        imageClipboard: ThrowingAndroidImageClipboard(),
+        notifier: notifier,
+        receivedTextRepository: ReceivedTextRepository(storage),
+        receivedImageRepository: imageRepository(storage),
+      );
+      final frame = await PayloadCrypto().encrypt(
+        metadata: const PayloadMetadata(
+          type: PayloadType.image,
+          mime: 'image/jpeg',
+          origin: 'laptop',
+          ts: 1800000400005,
+        ),
+        plaintext: [9, 8, 7],
+        pairingSecret: 'pairing-secret',
+      );
+
+      final result = await receiver.receive(
+        frame: frame,
+        pairingSecret: 'pairing-secret',
+      );
+
+      expect(result.received, isTrue);
+      expect(result.message, 'Image received. Tap the notification to copy.');
+      expect(notifier.imageMimes.single, 'image/jpeg');
+      final stored = await imageRepository(storage).loadLatest();
+      expect(stored?.mime, 'image/jpeg');
+      expect(await File(stored!.path).readAsBytes(), [9, 8, 7]);
     },
   );
 
   test('reports a clear receive failure for a wrong pairing secret', () async {
+    final storage = MemoryReceivedPayloadStorage();
     final receiver = PayloadReceiver(
       crypto: PayloadCrypto(),
       clipboard: FakeAndroidClipboard(),
+      imageClipboard: FakeAndroidImageClipboard(),
       notifier: FakePayloadNotifier(),
-      receivedTextRepository: ReceivedTextRepository(
-        MemoryReceivedTextStorage(),
-      ),
+      receivedTextRepository: ReceivedTextRepository(storage),
+      receivedImageRepository: imageRepository(storage),
     );
     final frame = await PayloadCrypto().encrypt(
       metadata: const PayloadMetadata(
@@ -153,16 +220,17 @@ void main() {
     final results = <PayloadReceiveResult>[];
     final resultCompleter = Completer<void>();
     final clipboard = FakeAndroidClipboard();
+    final storage = MemoryReceivedPayloadStorage();
     final controller = PayloadReceiveController(
       frames: frames.stream,
       pairingSecret: 'pairing-secret',
       receiver: PayloadReceiver(
         crypto: PayloadCrypto(),
         clipboard: clipboard,
+        imageClipboard: FakeAndroidImageClipboard(),
         notifier: FakePayloadNotifier(),
-        receivedTextRepository: ReceivedTextRepository(
-          MemoryReceivedTextStorage(),
-        ),
+        receivedTextRepository: ReceivedTextRepository(storage),
+        receivedImageRepository: imageRepository(storage),
       ),
       onResult: (result) {
         results.add(result);
@@ -203,6 +271,22 @@ class FakeAndroidClipboard implements AndroidClipboard {
 class ThrowingAndroidClipboard implements AndroidClipboard {
   @override
   Future<void> writeText(String text) async {
+    throw StateError('Background clipboard access denied.');
+  }
+}
+
+class FakeAndroidImageClipboard implements AndroidImageClipboard {
+  final images = <ReceivedImage>[];
+
+  @override
+  Future<void> writeImage(ReceivedImage image) async {
+    images.add(image);
+  }
+}
+
+class ThrowingAndroidImageClipboard implements AndroidImageClipboard {
+  @override
+  Future<void> writeImage(ReceivedImage image) async {
     throw StateError('Background clipboard access denied.');
   }
 }

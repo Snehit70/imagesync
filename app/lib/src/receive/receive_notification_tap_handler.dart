@@ -3,23 +3,28 @@ import 'dart:async';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'payload_receiver.dart';
+import 'received_image_repository.dart';
 import 'received_text_repository.dart';
 
 /// UI-isolate handler for taps on incoming-payload notifications.
 ///
 /// The foreground service isolate shows the notification and stores the
-/// text; tapping it brings the app to the foreground, where the clipboard
+/// payload; tapping it brings the app to the foreground, where the clipboard
 /// write is always permitted. Handles both warm taps (app running) and
 /// cold launches from a notification.
 class ReceiveNotificationTapHandler {
   ReceiveNotificationTapHandler({
     required this.repository,
+    required this.imageRepository,
     required this.clipboard,
+    required this.imageClipboard,
     FlutterLocalNotificationsPlugin? plugin,
   }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   final ReceivedTextRepository repository;
+  final ReceivedImageRepository imageRepository;
   final AndroidClipboard clipboard;
+  final AndroidImageClipboard imageClipboard;
   final FlutterLocalNotificationsPlugin _plugin;
 
   /// Invoked with a status message after a tap is handled.
@@ -46,7 +51,15 @@ class ReceiveNotificationTapHandler {
   }
 
   Future<void> handleResponse(NotificationResponse response) async {
-    if (response.payload != copyLatestTextNotificationPayload) return;
+    switch (response.payload) {
+      case copyLatestTextNotificationPayload:
+        await _copyLatestText();
+      case copyLatestImageNotificationPayload:
+        await _copyLatestImage();
+    }
+  }
+
+  Future<void> _copyLatestText() async {
     final text = await repository.loadLatest();
     if (text == null) {
       onCopied?.call('No received text to copy.');
@@ -54,5 +67,19 @@ class ReceiveNotificationTapHandler {
     }
     await clipboard.writeText(text);
     onCopied?.call('Text copied from laptop.');
+  }
+
+  Future<void> _copyLatestImage() async {
+    final image = await imageRepository.loadLatest();
+    if (image == null) {
+      onCopied?.call('No received image to copy.');
+      return;
+    }
+    try {
+      await imageClipboard.writeImage(image);
+      onCopied?.call('Image copied from laptop.');
+    } on Object catch (error) {
+      onCopied?.call('Image clipboard write failed: $error');
+    }
   }
 }

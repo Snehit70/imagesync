@@ -1,13 +1,13 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-abstract interface class ReceivedTextStorage {
+abstract interface class ReceivedPayloadStorage {
   Future<String?> read(String key);
 
   Future<void> write(String key, String value);
 }
 
-class SecureReceivedTextStorage implements ReceivedTextStorage {
-  const SecureReceivedTextStorage([
+class SecureReceivedPayloadStorage implements ReceivedPayloadStorage {
+  const SecureReceivedPayloadStorage([
     this._storage = const FlutterSecureStorage(),
   ]);
 
@@ -22,7 +22,7 @@ class SecureReceivedTextStorage implements ReceivedTextStorage {
   }
 }
 
-class MemoryReceivedTextStorage implements ReceivedTextStorage {
+class MemoryReceivedPayloadStorage implements ReceivedPayloadStorage {
   final Map<String, String> _values = {};
 
   @override
@@ -42,7 +42,7 @@ class ReceivedTextRepository {
 
   static const _latestTextKey = 'imagesync.receive.latestText';
 
-  final ReceivedTextStorage _storage;
+  final ReceivedPayloadStorage _storage;
 
   Future<void> saveLatest(String text) {
     return _storage.write(_latestTextKey, text);

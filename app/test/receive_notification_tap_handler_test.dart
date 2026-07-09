@@ -1,23 +1,56 @@
+import 'dart:io';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:imagesync/src/receive/payload_receiver.dart';
 import 'package:imagesync/src/receive/receive_notification_tap_handler.dart';
+import 'package:imagesync/src/receive/received_image_repository.dart';
 import 'package:imagesync/src/receive/received_text_repository.dart';
 
 void main() {
+  late Directory tempDir;
+
+  setUp(() async {
+    tempDir = await Directory.systemTemp.createTemp('imagesync_tap_test');
+  });
+
+  tearDown(() async {
+    await tempDir.delete(recursive: true);
+  });
+
+  ReceivedImageRepository imageRepository(ReceivedPayloadStorage storage) {
+    return ReceivedImageRepository(
+      storage,
+      directoryProvider: () async => tempDir,
+    );
+  }
+
+  ReceiveNotificationTapHandler handler(
+    ReceivedPayloadStorage storage, {
+    required _FakeClipboard clipboard,
+    required _FakeImageClipboard imageClipboard,
+  }) {
+    return ReceiveNotificationTapHandler(
+      repository: ReceivedTextRepository(storage),
+      imageRepository: imageRepository(storage),
+      clipboard: clipboard,
+      imageClipboard: imageClipboard,
+    );
+  }
+
   test('copies the latest received text when the notification is tapped',
       () async {
-    final storage = MemoryReceivedTextStorage();
-    final repository = ReceivedTextRepository(storage);
-    await repository.saveLatest('laptop text');
+    final storage = MemoryReceivedPayloadStorage();
+    await ReceivedTextRepository(storage).saveLatest('laptop text');
     final clipboard = _FakeClipboard();
     final messages = <String>[];
-    final handler = ReceiveNotificationTapHandler(
-      repository: repository,
+    final tapHandler = handler(
+      storage,
       clipboard: clipboard,
+      imageClipboard: _FakeImageClipboard(),
     )..onCopied = messages.add;
 
-    await handler.handleResponse(
+    await tapHandler.handleResponse(
       const NotificationResponse(
         notificationResponseType:
             NotificationResponseType.selectedNotification,
@@ -29,16 +62,44 @@ void main() {
     expect(messages.single, 'Text copied from laptop.');
   });
 
-  test('ignores notification taps without the copy payload', () async {
-    final repository = ReceivedTextRepository(MemoryReceivedTextStorage());
-    await repository.saveLatest('laptop text');
-    final clipboard = _FakeClipboard();
-    final handler = ReceiveNotificationTapHandler(
-      repository: repository,
-      clipboard: clipboard,
+  test('copies the latest received image when the notification is tapped',
+      () async {
+    final storage = MemoryReceivedPayloadStorage();
+    await imageRepository(storage).saveLatest([1, 2, 3], 'image/png');
+    final imageClipboard = _FakeImageClipboard();
+    final messages = <String>[];
+    final tapHandler = handler(
+      storage,
+      clipboard: _FakeClipboard(),
+      imageClipboard: imageClipboard,
+    )..onCopied = messages.add;
+
+    await tapHandler.handleResponse(
+      const NotificationResponse(
+        notificationResponseType:
+            NotificationResponseType.selectedNotification,
+        payload: copyLatestImageNotificationPayload,
+      ),
     );
 
-    await handler.handleResponse(
+    final written = imageClipboard.images.single;
+    expect(written.mime, 'image/png');
+    expect(await File(written.path).readAsBytes(), [1, 2, 3]);
+    expect(messages.single, 'Image copied from laptop.');
+  });
+
+  test('ignores notification taps without a copy payload', () async {
+    final storage = MemoryReceivedPayloadStorage();
+    await ReceivedTextRepository(storage).saveLatest('laptop text');
+    final clipboard = _FakeClipboard();
+    final imageClipboard = _FakeImageClipboard();
+    final tapHandler = handler(
+      storage,
+      clipboard: clipboard,
+      imageClipboard: imageClipboard,
+    );
+
+    await tapHandler.handleResponse(
       const NotificationResponse(
         notificationResponseType:
             NotificationResponseType.selectedNotification,
@@ -46,17 +107,19 @@ void main() {
     );
 
     expect(clipboard.text, isNull);
+    expect(imageClipboard.images, isEmpty);
   });
 
   test('reports when no received text is stored yet', () async {
     final clipboard = _FakeClipboard();
     final messages = <String>[];
-    final handler = ReceiveNotificationTapHandler(
-      repository: ReceivedTextRepository(MemoryReceivedTextStorage()),
+    final tapHandler = handler(
+      MemoryReceivedPayloadStorage(),
       clipboard: clipboard,
+      imageClipboard: _FakeImageClipboard(),
     )..onCopied = messages.add;
 
-    await handler.handleResponse(
+    await tapHandler.handleResponse(
       const NotificationResponse(
         notificationResponseType:
             NotificationResponseType.selectedNotification,
@@ -67,6 +130,50 @@ void main() {
     expect(clipboard.text, isNull);
     expect(messages.single, 'No received text to copy.');
   });
+
+  test('reports when no received image is stored yet', () async {
+    final imageClipboard = _FakeImageClipboard();
+    final messages = <String>[];
+    final tapHandler = handler(
+      MemoryReceivedPayloadStorage(),
+      clipboard: _FakeClipboard(),
+      imageClipboard: imageClipboard,
+    )..onCopied = messages.add;
+
+    await tapHandler.handleResponse(
+      const NotificationResponse(
+        notificationResponseType:
+            NotificationResponseType.selectedNotification,
+        payload: copyLatestImageNotificationPayload,
+      ),
+    );
+
+    expect(imageClipboard.images, isEmpty);
+    expect(messages.single, 'No received image to copy.');
+  });
+
+  test('surfaces image clipboard write failures instead of throwing',
+      () async {
+    final storage = MemoryReceivedPayloadStorage();
+    await imageRepository(storage).saveLatest([1], 'image/png');
+    final messages = <String>[];
+    final tapHandler = ReceiveNotificationTapHandler(
+      repository: ReceivedTextRepository(storage),
+      imageRepository: imageRepository(storage),
+      clipboard: _FakeClipboard(),
+      imageClipboard: _ThrowingImageClipboard(),
+    )..onCopied = messages.add;
+
+    await tapHandler.handleResponse(
+      const NotificationResponse(
+        notificationResponseType:
+            NotificationResponseType.selectedNotification,
+        payload: copyLatestImageNotificationPayload,
+      ),
+    );
+
+    expect(messages.single, startsWith('Image clipboard write failed:'));
+  });
 }
 
 class _FakeClipboard implements AndroidClipboard {
@@ -75,5 +182,21 @@ class _FakeClipboard implements AndroidClipboard {
   @override
   Future<void> writeText(String text) async {
     this.text = text;
+  }
+}
+
+class _FakeImageClipboard implements AndroidImageClipboard {
+  final images = <ReceivedImage>[];
+
+  @override
+  Future<void> writeImage(ReceivedImage image) async {
+    images.add(image);
+  }
+}
+
+class _ThrowingImageClipboard implements AndroidImageClipboard {
+  @override
+  Future<void> writeImage(ReceivedImage image) async {
+    throw StateError('FileProvider rejected the path.');
   }
 }

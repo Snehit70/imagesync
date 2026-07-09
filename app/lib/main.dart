@@ -12,6 +12,7 @@ import 'src/pairing/pairing_code.dart';
 import 'src/pairing/pairing_repository.dart';
 import 'src/receive/payload_receiver.dart';
 import 'src/receive/receive_notification_tap_handler.dart';
+import 'src/receive/received_image_repository.dart';
 import 'src/receive/received_text_repository.dart';
 import 'src/share/share_intake_controller.dart';
 import 'src/share/share_publisher.dart';
@@ -35,8 +36,14 @@ void main() {
       pairingRepository: PairingRepository(const SecurePairingStorage()),
       shareSource: const ReceiveSharingIntentSource(),
       receiveNotificationTapHandler: ReceiveNotificationTapHandler(
-        repository: const ReceivedTextRepository(SecureReceivedTextStorage()),
+        repository: const ReceivedTextRepository(
+          SecureReceivedPayloadStorage(),
+        ),
+        imageRepository: ReceivedImageRepository(
+          const SecureReceivedPayloadStorage(),
+        ),
         clipboard: const FlutterAndroidClipboard(),
+        imageClipboard: const ChannelAndroidImageClipboard(),
       ),
     ),
   );

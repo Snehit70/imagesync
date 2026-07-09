@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:imagesync/src/foreground/service_relay_controller.dart';
 import 'package:imagesync/src/pairing/pairing_code.dart';
 import 'package:imagesync/src/receive/payload_receiver.dart';
+import 'package:imagesync/src/receive/received_image_repository.dart';
 import 'package:imagesync/src/receive/received_text_repository.dart';
 import 'package:imagesync/src/settings/app_settings.dart';
 import 'package:imagesync/src/shared/payload_crypto.dart';
@@ -178,9 +180,15 @@ class _Harness {
       receiverFactory: (_) => PayloadReceiver(
         crypto: PayloadCrypto(),
         clipboard: clipboard,
+        imageClipboard: _SilentImageClipboard(),
         notifier: _SilentNotifier(),
         receivedTextRepository: ReceivedTextRepository(
-          MemoryReceivedTextStorage(),
+          MemoryReceivedPayloadStorage(),
+        ),
+        receivedImageRepository: ReceivedImageRepository(
+          MemoryReceivedPayloadStorage(),
+          directoryProvider: () async =>
+              Directory.systemTemp.createTemp('imagesync_relay_test'),
         ),
       ),
       emit: emitted.add,
@@ -224,6 +232,11 @@ class _RecordingClipboard implements AndroidClipboard {
   Future<void> writeText(String text) async {
     texts.add(text);
   }
+}
+
+class _SilentImageClipboard implements AndroidImageClipboard {
+  @override
+  Future<void> writeImage(ReceivedImage image) async {}
 }
 
 class _SilentNotifier implements PayloadNotifier {

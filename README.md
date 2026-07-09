@@ -2,7 +2,7 @@
 
 ImageSync is a LAN-only clipboard pool for a Linux/Wayland laptop and an Android phone. The current implementation has the Bun relay slice: encrypted WebSocket protocol, latest-write-wins pool, Wayland clipboard adapter/sync, mDNS advertisement, QR/manual pairing output, structured logs, tests, and a compiled relay binary.
 
-The Flutter Android app is not implemented yet. Track the remaining slices in GitHub issues #4-#8.
+The Flutter Android app lives in `app/`. Remaining work is tracked on the wayfinder map, GitHub issue #9; the live gap list is `docs/IMPLEMENTATION_STATUS.md`.
 
 ## Relay Prerequisites
 
@@ -25,6 +25,16 @@ host=<lan-ip> port=17321 secret=<pairing-secret>
 ```
 
 The relay checks whether the configured port is already in use before starting. It also advertises `_imagesync._tcp` over mDNS for phone discovery.
+
+## Install As A Service
+
+To run the relay persistently as a `systemd --user` service:
+
+```bash
+bun run install:relay
+```
+
+See `docs/INSTALL.md` for prerequisites, pairing under systemd, and troubleshooting.
 
 ## Development Checks
 

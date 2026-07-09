@@ -6,7 +6,8 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "build:relay": "bun build ./src/relay/cli.ts --compile --outfile dist/imagesync-relay"
+    "build:relay": "bun build ./src/relay/cli.ts --compile --outfile dist/imagesync-relay",
+    "install:relay": "bash scripts/install-relay.sh"
   },
   "devDependencies": {
     "@types/bun": "latest",

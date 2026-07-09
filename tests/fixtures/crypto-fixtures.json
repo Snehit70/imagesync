@@ -1,0 +1,76 @@
+{
+  "payloadVectors": [
+    {
+      "name": "text-ascii",
+      "pairingSecret": "fixture-secret-1",
+      "plaintextBase64": "Y2xpcGJvYXJkIHRleHQgZml4dHVyZQ==",
+      "frame": {
+        "v": 1,
+        "type": "text",
+        "mime": "text/plain",
+        "origin": "laptop",
+        "ts": 1800000000001,
+        "nonce": "AQIDBAUGBwgJCgsM",
+        "payload": "cEjswLyPDKqAGxG4+1XyKtQFzTro+AQG3XK4lTBsYqAfNZaj0bc="
+      }
+    },
+    {
+      "name": "image-binary",
+      "pairingSecret": "fixture-secret-2",
+      "plaintextBase64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w==",
+      "frame": {
+        "v": 1,
+        "type": "image",
+        "mime": "image/png",
+        "origin": "phone",
+        "ts": 1800000000002,
+        "nonce": "MjM0NTY3ODk6Ozw9",
+        "payload": "whYNCguNMHadXBV/M9mjLF3ZRZlnr+dzPRId2i2w8BBFrKkVmJsuTVQycNGRp9j2YuYNcYyy/jmC58GfJRy/uOsQwHKqLmtASzK1UKGXbPIqh89THa3SAb9tM0FjCgrrCzizY0lfsnJgaak84c98p/Qef9eRqqe1nN+QdUbvIIl3ebXuPozZFyM9y8wwfrSVTJ5F3BUXlPexliCDWBPB0NpCkAfT69G7B6/HsvL2/qaVr/SHM31ZagPYIT51WhCwd4ZdTScDBx4QGSDK8A3vs0VWrtZA3x/Gj1qOkqxpF/4PDM4Iw6hMln6dCYxIpO1sUtkyT98dVdLi/GbqS+/PbJ5npv4Nwdb/58+J6ZATlMI="
+      }
+    },
+    {
+      "name": "text-unicode",
+      "pairingSecret": "paîring-🔑-secret",
+      "plaintextBase64": "dW5pY29kZSBjbGlwYm9hcmQg8J+TiyDinJMgw7E=",
+      "frame": {
+        "v": 1,
+        "type": "text",
+        "mime": "text/plain",
+        "origin": "laptop-α-📎",
+        "ts": 1800000000003,
+        "nonce": "ZGVmZ2hpamtsbW5v",
+        "payload": "CYPNYF0gPFzAWDSb7fL42QE/z9tTRDlSprj29T7d8fkKEBwH1W2ll/bVZK1V"
+      }
+    },
+    {
+      "name": "empty-plaintext",
+      "pairingSecret": "fixture-secret-1",
+      "plaintextBase64": "",
+      "frame": {
+        "v": 1,
+        "type": "text",
+        "mime": "text/plain",
+        "origin": "laptop",
+        "ts": 1800000000004,
+        "nonce": "lpeYmZqbnJ2en6Ch",
+        "payload": "ptT8ST0SxuLUhrPX7MB+6A=="
+      }
+    }
+  ],
+  "pairingProofVectors": [
+    {
+      "name": "proof-ascii",
+      "pairingSecret": "fixture-secret-1",
+      "challenge": "challenge-123",
+      "deviceId": "device-abc",
+      "proofBase64": "hTUYqNP7W5skl0oURRVvHeft3JnINh/4gDyTj+Z0hp0="
+    },
+    {
+      "name": "proof-unicode",
+      "pairingSecret": "paîring-🔑-secret",
+      "challenge": "chällenge-456",
+      "deviceId": "phone-📱",
+      "proofBase64": "oE7jApkGeT8r/MKmv6eJFF9AzhS8jlbdzzXYaaJcq30="
+    }
+  ]
+}

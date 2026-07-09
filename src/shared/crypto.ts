@@ -8,8 +8,8 @@ export async function encryptPayload(
   metadata: PayloadMetadata,
   plaintext: Uint8Array,
   pairingSecret: string,
+  nonceBytes: Uint8Array = crypto.getRandomValues(new Uint8Array(12)),
 ): Promise<PayloadFrame> {
-  const nonceBytes = crypto.getRandomValues(new Uint8Array(12));
   const nonce = toBase64(nonceBytes);
   const frameMetadata = { v: 1 as const, ...metadata, nonce };
   const key = await derivePayloadKey(pairingSecret);

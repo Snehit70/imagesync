@@ -1,0 +1,61 @@
+import { describe, expect, test } from "bun:test";
+import { createPairingProof } from "../src/shared/auth";
+import { decryptPayload, encryptPayload } from "../src/shared/crypto";
+import type { PayloadFrame } from "../src/shared/wire";
+import fixtures from "./fixtures/crypto-fixtures.json";
+
+interface PayloadVector {
+  name: string;
+  pairingSecret: string;
+  plaintextBase64: string;
+  frame: PayloadFrame;
+}
+
+const payloadVectors = fixtures.payloadVectors as PayloadVector[];
+const firstVector = payloadVectors[0];
+if (!firstVector) throw new Error("crypto-fixtures.json has no payload vectors");
+
+describe("cross-language crypto fixtures", () => {
+  for (const vector of payloadVectors) {
+    test(`decrypts payload vector ${vector.name}`, async () => {
+      const plaintext = await decryptPayload(vector.frame, vector.pairingSecret);
+      expect(Buffer.from(plaintext).toString("base64")).toBe(vector.plaintextBase64);
+    });
+
+    test(`re-encrypts payload vector ${vector.name} byte-for-byte`, async () => {
+      const { type, mime, origin, ts } = vector.frame;
+      const frame = await encryptPayload(
+        { type, mime, origin, ts },
+        new Uint8Array(Buffer.from(vector.plaintextBase64, "base64")),
+        vector.pairingSecret,
+        new Uint8Array(Buffer.from(vector.frame.nonce, "base64")),
+      );
+      expect(frame).toEqual(vector.frame);
+    });
+  }
+
+  test("rejects a fixture frame with the wrong pairing secret", async () => {
+    await expect(decryptPayload(firstVector.frame, "wrong-secret")).rejects.toThrow();
+  });
+
+  test("rejects a fixture frame with tampered metadata", async () => {
+    await expect(
+      decryptPayload({ ...firstVector.frame, ts: firstVector.frame.ts + 1 }, firstVector.pairingSecret),
+    ).rejects.toThrow();
+  });
+
+  test("rejects a fixture frame with tampered ciphertext", async () => {
+    const bytes = Buffer.from(firstVector.frame.payload, "base64");
+    bytes.writeUInt8(bytes.readUInt8(0) ^ 0xff, 0);
+    await expect(
+      decryptPayload({ ...firstVector.frame, payload: bytes.toString("base64") }, firstVector.pairingSecret),
+    ).rejects.toThrow();
+  });
+
+  for (const vector of fixtures.pairingProofVectors) {
+    test(`reproduces pairing proof vector ${vector.name}`, async () => {
+      const proof = await createPairingProof(vector.pairingSecret, vector.challenge, vector.deviceId);
+      expect(proof).toBe(vector.proofBase64);
+    });
+  }
+});

@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -34,19 +35,27 @@ jobs:
         with:
           name: imagesync-relay-linux-x64
           path: dist/imagesync-relay
+          if-no-files-found: error
 
-  flutter-placeholder:
+  app:
     name: Flutter app
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('app/pubspec.yaml') != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.44.4
+          cache: true
 
       - name: Install dependencies
         working-directory: app
@@ -69,3 +78,4 @@ jobs:
         with:
           name: imagesync-debug-apk
           path: app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error

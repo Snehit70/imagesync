@@ -8,7 +8,6 @@ import 'src/foreground/imagesync_foreground_service.dart';
 import 'src/foreground/send_clipboard_screen.dart';
 import 'src/pairing/pairing_code.dart';
 import 'src/pairing/pairing_repository.dart';
-import 'src/receive/payload_receiver.dart';
 import 'src/share/share_intake_controller.dart';
 import 'src/share/share_publisher.dart';
 import 'src/settings/app_settings.dart';
@@ -141,9 +140,7 @@ class _PairingScreenState extends State<PairingScreen> {
   final _secretController = TextEditingController();
 
   PairingCode? _pairing;
-  RelayConnection? _connection;
   ShareIntakeController? _shareIntakeController;
-  PayloadReceiveController? _payloadReceiveController;
   AppSettings _settings = const AppSettings();
   late final ForegroundServiceCoordinator _foregroundServiceCoordinator =
       ForegroundServiceCoordinator(widget.foregroundServiceClient);
@@ -156,18 +153,36 @@ class _PairingScreenState extends State<PairingScreen> {
   @override
   void initState() {
     super.initState();
+    widget.foregroundServiceClient.addTaskDataCallback(_onServiceData);
     _loadPairing();
   }
 
   @override
   void dispose() {
+    widget.foregroundServiceClient.removeTaskDataCallback(_onServiceData);
     _shareIntakeController?.dispose();
-    _payloadReceiveController?.dispose();
-    _connection?.close();
     _hostController.dispose();
     _portController.dispose();
     _secretController.dispose();
     super.dispose();
+  }
+
+  void _onServiceData(Object data) {
+    if (data is! Map || !mounted) return;
+    switch (data['kind']) {
+      case 'status':
+        final status = ConnectionStatus.values
+            .where((value) => value.name == data['status'])
+            .firstOrNull;
+        if (status != null) {
+          setState(() => _connectionStatus = status);
+        }
+      case 'receive':
+        final message = data['message'];
+        if (message is String) {
+          setState(() => _receiveStatus = message);
+        }
+    }
   }
 
   Future<void> _loadPairing() async {
@@ -182,10 +197,8 @@ class _PairingScreenState extends State<PairingScreen> {
       _pairing = pairing;
       _settings = settings;
       _loading = false;
+      if (pairing != null) _connectionStatus = ConnectionStatus.searching;
     });
-    if (pairing != null) {
-      await _connect(pairing);
-    }
     await _syncForegroundService();
     await _startShareIntake();
   }
@@ -202,8 +215,8 @@ class _PairingScreenState extends State<PairingScreen> {
       setState(() {
         _pairing = pairing;
         _error = null;
+        _connectionStatus = ConnectionStatus.searching;
       });
-      await _connect(pairing);
       await _syncForegroundService();
     } on PairingCodeException catch (error) {
       setState(() => _error = error.message);
@@ -222,8 +235,8 @@ class _PairingScreenState extends State<PairingScreen> {
       setState(() {
         _pairing = pairing;
         _error = null;
+        _connectionStatus = ConnectionStatus.searching;
       });
-      await _connect(pairing);
       await _syncForegroundService();
     } on PairingCodeException catch (error) {
       setState(() => _error = error.message);
@@ -233,53 +246,15 @@ class _PairingScreenState extends State<PairingScreen> {
   }
 
   Future<void> _resetPairing() async {
-    await _payloadReceiveController?.dispose();
-    await _connection?.close();
     await widget.pairingRepository.reset();
     if (!mounted) return;
     setState(() {
-      _connection = null;
-      _payloadReceiveController = null;
       _connectionStatus = ConnectionStatus.offline;
       _pairing = null;
       _error = null;
       _receiveStatus = null;
     });
     await _syncForegroundService();
-  }
-
-  Future<void> _connect(PairingCode pairing) async {
-    await _payloadReceiveController?.dispose();
-    await _connection?.close();
-    final connection = widget.relayConnectionFactory(pairing);
-    if (!mounted) {
-      await connection.close();
-      return;
-    }
-    setState(() {
-      _connection = connection;
-      _connectionStatus = ConnectionStatus.searching;
-    });
-    connection.status.listen((status) {
-      if (!mounted) return;
-      setState(() => _connectionStatus = status);
-    });
-    _payloadReceiveController = PayloadReceiveController(
-      frames: connection.payloads,
-      pairingSecret: pairing.secret,
-      receiver: PayloadReceiver(
-        crypto: PayloadCrypto(),
-        clipboard: const FlutterAndroidClipboard(),
-        notifier: LocalPayloadNotifier(
-          enabled: _settings.showReceiveNotifications,
-        ),
-      ),
-      onResult: (result) {
-        if (!mounted) return;
-        setState(() => _receiveStatus = result.message);
-      },
-    )..start();
-    await connection.start();
   }
 
   Future<void> _startShareIntake() async {

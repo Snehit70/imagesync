@@ -1,3 +1,5 @@
+typedef TaskDataCallback = void Function(Object data);
+
 abstract interface class ForegroundServiceClient {
   Future<void> initialize();
 
@@ -10,4 +12,10 @@ abstract interface class ForegroundServiceClient {
   Future<void> update();
 
   Future<void> stop();
+
+  void addTaskDataCallback(TaskDataCallback callback);
+
+  void removeTaskDataCallback(TaskDataCallback callback);
+
+  Future<void> sendToTask(Object data);
 }

@@ -1,9 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
+import '../pairing/pairing_repository.dart';
+import '../receive/payload_receiver.dart';
+import '../settings/app_settings_repository.dart';
+import '../shared/payload_crypto.dart';
+import '../shared/relay_connection.dart';
 import 'foreground_service_client.dart';
+import 'service_relay_controller.dart';
 
 const sendClipboardRoute = '/send-clipboard';
 const sendClipboardButtonId = 'send_clipboard';
+
+const _notificationButtons = [
+  NotificationButton(id: sendClipboardButtonId, text: 'Send clipboard'),
+];
 
 @pragma('vm:entry-point')
 void startForegroundCallback() {
@@ -11,8 +23,58 @@ void startForegroundCallback() {
 }
 
 class ImageSyncForegroundTaskHandler extends TaskHandler {
+  ImageSyncForegroundTaskHandler({ServiceRelayController? controller})
+    : _controller = controller ?? _relayController();
+
+  final ServiceRelayController _controller;
+
+  static ServiceRelayController _relayController() {
+    final pairingRepository = PairingRepository(const SecurePairingStorage());
+    final settingsRepository = AppSettingsRepository(
+      const SecureAppSettingsStorage(),
+    );
+    return ServiceRelayController(
+      loadPairing: pairingRepository.load,
+      loadSettings: settingsRepository.load,
+      connectionFactory: (pairing) => RelayConnection(
+        pairing: pairing,
+        deviceId: 'phone',
+        transport: WebSocketRelayTransport.connect(pairing),
+      ),
+      receiverFactory: (settings) => PayloadReceiver(
+        crypto: PayloadCrypto(),
+        clipboard: const FlutterAndroidClipboard(),
+        notifier: LocalPayloadNotifier(
+          enabled: settings.showReceiveNotifications,
+          requestPermissionOnInit: false,
+        ),
+      ),
+      emit: FlutterForegroundTask.sendDataToMain,
+      updateNotification: (title, text) async {
+        await FlutterForegroundTask.updateService(
+          notificationTitle: title,
+          notificationText: text,
+          notificationButtons: _notificationButtons,
+          notificationInitialRoute: '/',
+        );
+      },
+    );
+  }
+
   @override
-  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {}
+  Future<void> onStart(DateTime timestamp, TaskStarter starter) {
+    return _controller.start();
+  }
+
+  @override
+  void onReceiveData(Object data) {
+    unawaited(_controller.handleTaskData(data));
+  }
+
+  @override
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) {
+    return _controller.stop();
+  }
 
   @override
   void onNotificationButtonPressed(String id) {
@@ -28,9 +90,6 @@ class ImageSyncForegroundTaskHandler extends TaskHandler {
 
   @override
   void onRepeatEvent(DateTime timestamp) {}
-
-  @override
-  Future<void> onStart(DateTime timestamp, TaskStarter starter) async {}
 }
 
 class ImageSyncForegroundServiceClient implements ForegroundServiceClient {
@@ -44,7 +103,7 @@ class ImageSyncForegroundServiceClient implements ForegroundServiceClient {
         channelId: 'imagesync_foreground',
         channelName: 'ImageSync clipboard',
         channelDescription:
-            'Persistent clipboard send notification for ImageSync.',
+            'Persistent clipboard sync notification for ImageSync.',
         onlyAlertOnce: true,
       ),
       iosNotificationOptions: const IOSNotificationOptions(
@@ -54,7 +113,7 @@ class ImageSyncForegroundServiceClient implements ForegroundServiceClient {
       foregroundTaskOptions: ForegroundTaskOptions(
         eventAction: ForegroundTaskEventAction.nothing(),
         autoRunOnBoot: false,
-        autoRunOnMyPackageReplaced: false,
+        autoRunOnMyPackageReplaced: true,
         allowWakeLock: true,
         allowWifiLock: true,
       ),
@@ -80,12 +139,9 @@ class ImageSyncForegroundServiceClient implements ForegroundServiceClient {
       await FlutterForegroundTask.startService(
         serviceId: 17321,
         serviceTypes: [ForegroundServiceTypes.dataSync],
-        notificationTitle: 'ImageSync is ready',
-        notificationText:
-            'Tap Send clipboard to push phone text to the laptop.',
-        notificationButtons: const [
-          NotificationButton(id: sendClipboardButtonId, text: 'Send clipboard'),
-        ],
+        notificationTitle: 'ImageSync connecting',
+        notificationText: 'Looking for the laptop relay...',
+        notificationButtons: _notificationButtons,
         notificationInitialRoute: '/',
         callback: startForegroundCallback,
       ),
@@ -99,18 +155,24 @@ class ImageSyncForegroundServiceClient implements ForegroundServiceClient {
 
   @override
   Future<void> update() async {
-    await _requireSuccess(
-      await FlutterForegroundTask.updateService(
-        notificationTitle: 'ImageSync is ready',
-        notificationText:
-            'Tap Send clipboard to push phone text to the laptop.',
-        notificationButtons: const [
-          NotificationButton(id: sendClipboardButtonId, text: 'Send clipboard'),
-        ],
-        notificationInitialRoute: '/',
-        callback: startForegroundCallback,
-      ),
-    );
+    await sendToTask(serviceSyncCommand);
+  }
+
+  @override
+  void addTaskDataCallback(TaskDataCallback callback) {
+    FlutterForegroundTask.addTaskDataCallback(callback);
+  }
+
+  @override
+  void removeTaskDataCallback(TaskDataCallback callback) {
+    FlutterForegroundTask.removeTaskDataCallback(callback);
+  }
+
+  @override
+  Future<void> sendToTask(Object data) async {
+    if (await FlutterForegroundTask.isRunningService) {
+      FlutterForegroundTask.sendDataToTask(data);
+    }
   }
 
   Future<void> _requireSuccess(ServiceRequestResult result) async {

@@ -30,10 +30,15 @@ class LocalPayloadNotifier implements PayloadNotifier {
   LocalPayloadNotifier({
     FlutterLocalNotificationsPlugin? plugin,
     this.enabled = true,
+    this.requestPermissionOnInit = true,
   }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   final FlutterLocalNotificationsPlugin _plugin;
   final bool enabled;
+
+  /// The foreground service isolate has no activity to anchor a permission
+  /// prompt; the UI requests notification permission before starting it.
+  final bool requestPermissionOnInit;
   bool _initialized = false;
 
   @override
@@ -78,11 +83,13 @@ class LocalPayloadNotifier implements PayloadNotifier {
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       ),
     );
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.requestNotificationsPermission();
+    if (requestPermissionOnInit) {
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
+          ?.requestNotificationsPermission();
+    }
     _initialized = true;
   }
 }

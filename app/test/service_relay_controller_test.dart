@@ -1,0 +1,231 @@
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:imagesync/src/foreground/service_relay_controller.dart';
+import 'package:imagesync/src/pairing/pairing_code.dart';
+import 'package:imagesync/src/receive/payload_receiver.dart';
+import 'package:imagesync/src/settings/app_settings.dart';
+import 'package:imagesync/src/shared/payload_crypto.dart';
+import 'package:imagesync/src/shared/relay_connection.dart';
+import 'package:imagesync/src/shared/wire.dart';
+
+void main() {
+  const pairing = PairingCode(
+    host: '192.168.1.10',
+    port: 17321,
+    secret: 'pairing-secret',
+  );
+
+  test('reports offline and skips connecting when unpaired', () async {
+    final harness = _Harness(pairing: null);
+
+    await harness.controller.start();
+
+    expect(harness.transports, isEmpty);
+    expect(harness.emitted, [
+      {'kind': 'status', 'status': 'offline'},
+    ]);
+    expect(harness.notifications.single.title, 'ImageSync offline');
+  });
+
+  test('connects, forwards status, and updates the notification', () async {
+    final harness = _Harness(pairing: pairing);
+
+    await harness.controller.start();
+    final transport = harness.transports.single;
+    transport.receive({'v': 1, 'kind': 'auth_ok'});
+    await _drain();
+
+    expect(
+      harness.emitted,
+      contains(equals({'kind': 'status', 'status': 'connected'})),
+    );
+    expect(
+      harness.notifications.map((n) => n.title),
+      contains('ImageSync connected'),
+    );
+  });
+
+  test('receives laptop payloads and forwards the result', () async {
+    final harness = _Harness(pairing: pairing);
+
+    await harness.controller.start();
+    final transport = harness.transports.single;
+    transport.receive({'v': 1, 'kind': 'auth_ok'});
+    transport.receive({
+      'v': 1,
+      'kind': 'payload',
+      'frame': (await _textFrame('hello from laptop', origin: 'laptop'))
+          .toJson(),
+    });
+    await _waitUntil(
+      () => harness.emitted.any((message) => message['kind'] == 'receive'),
+    );
+
+    expect(harness.clipboard.texts, ['hello from laptop']);
+    expect(
+      harness.emitted,
+      contains(
+        equals({
+          'kind': 'receive',
+          'received': true,
+          'message': 'Text copied from laptop.',
+        }),
+      ),
+    );
+  });
+
+  test('drops frames the phone itself published', () async {
+    final harness = _Harness(pairing: pairing);
+
+    await harness.controller.start();
+    final transport = harness.transports.single;
+    transport.receive({'v': 1, 'kind': 'auth_ok'});
+    transport.receive({
+      'v': 1,
+      'kind': 'payload',
+      'frame': (await _textFrame('echo', origin: 'phone')).toJson(),
+    });
+    // Give a same-origin frame ample time to (wrongly) reach the receiver.
+    await Future<void>.delayed(const Duration(seconds: 3));
+
+    expect(harness.clipboard.texts, isEmpty);
+    expect(
+      harness.emitted.where((message) => message['kind'] == 'receive'),
+      isEmpty,
+    );
+  });
+
+  test('sync command tears down and reconnects with fresh pairing', () async {
+    final harness = _Harness(pairing: pairing);
+
+    await harness.controller.start();
+    expect(harness.transports, hasLength(1));
+
+    await harness.controller.handleTaskData(const {'kind': 'sync'});
+
+    expect(harness.transports, hasLength(2));
+    expect(harness.transports.first.closed, isTrue);
+    expect(harness.transports.last.closed, isFalse);
+  });
+
+  test('sync command goes offline when pairing was reset', () async {
+    final harness = _Harness(pairing: pairing);
+
+    await harness.controller.start();
+    harness.pairing = null;
+    await harness.controller.handleTaskData(const {'kind': 'sync'});
+    await _drain();
+
+    expect(harness.transports.single.closed, isTrue);
+    expect(harness.emitted.last, {'kind': 'status', 'status': 'offline'});
+  });
+
+  test('stop closes the connection', () async {
+    final harness = _Harness(pairing: pairing);
+
+    await harness.controller.start();
+    await harness.controller.stop();
+
+    expect(harness.transports.single.closed, isTrue);
+  });
+}
+
+Future<void> _drain() => pumpEventQueue(times: 200);
+
+Future<void> _waitUntil(
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 30),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail('Timed out waiting for condition.');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
+Future<PayloadFrame> _textFrame(String text, {required String origin}) {
+  return PayloadCrypto().encrypt(
+    metadata: PayloadMetadata(
+      type: PayloadType.text,
+      mime: 'text/plain',
+      origin: origin,
+      ts: 1,
+    ),
+    plaintext: text.codeUnits,
+    pairingSecret: 'pairing-secret',
+  );
+}
+
+class _Harness {
+  _Harness({required this.pairing}) {
+    controller = ServiceRelayController(
+      loadPairing: () async => pairing,
+      loadSettings: () async => const AppSettings(),
+      connectionFactory: (pairing) {
+        final transport = _FakeTransport();
+        transports.add(transport);
+        return RelayConnection(
+          pairing: pairing,
+          deviceId: 'phone',
+          transport: transport,
+        );
+      },
+      receiverFactory: (_) => PayloadReceiver(
+        crypto: PayloadCrypto(),
+        clipboard: clipboard,
+        notifier: _SilentNotifier(),
+      ),
+      emit: emitted.add,
+      updateNotification: (title, text) async {
+        notifications.add((title: title, text: text));
+      },
+    );
+  }
+
+  PairingCode? pairing;
+  late final ServiceRelayController controller;
+  final transports = <_FakeTransport>[];
+  final emitted = <Map<String, Object?>>[];
+  final notifications = <({String title, String text})>[];
+  final clipboard = _RecordingClipboard();
+}
+
+class _FakeTransport implements RelayTransport {
+  final _messages = StreamController<Object?>.broadcast();
+  bool closed = false;
+
+  void receive(Map<String, Object?> message) => _messages.add(message);
+
+  @override
+  Stream<Object?> get messages => _messages.stream;
+
+  @override
+  void send(Map<String, Object?> message) {}
+
+  @override
+  Future<void> close() async {
+    closed = true;
+    await _messages.close();
+  }
+}
+
+class _RecordingClipboard implements AndroidClipboard {
+  final texts = <String>[];
+
+  @override
+  Future<void> writeText(String text) async {
+    texts.add(text);
+  }
+}
+
+class _SilentNotifier implements PayloadNotifier {
+  @override
+  Future<void> showTextReady(String preview) async {}
+
+  @override
+  Future<void> showImageReady(String mime) async {}
+}

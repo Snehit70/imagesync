@@ -102,7 +102,7 @@ void main() {
 
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Notify when laptop payloads arrive'), findsOneWidget);
-    expect(find.text('Show the send clipboard notification'), findsOneWidget);
+    expect(find.text('Keep background sync running'), findsOneWidget);
 
     await tester.tap(
       find.widgetWithText(SwitchListTile, 'Notify when laptop payloads arrive'),
@@ -111,7 +111,7 @@ void main() {
     await tester.tap(
       find.widgetWithText(
         SwitchListTile,
-        'Show the send clipboard notification',
+        'Keep background sync running',
       ),
     );
     await tester.pumpAndSettle();
@@ -168,4 +168,13 @@ class FakeForegroundServiceClient implements ForegroundServiceClient {
 
   @override
   Future<void> update() async {}
+
+  @override
+  void addTaskDataCallback(TaskDataCallback callback) {}
+
+  @override
+  void removeTaskDataCallback(TaskDataCallback callback) {}
+
+  @override
+  Future<void> sendToTask(Object data) async {}
 }

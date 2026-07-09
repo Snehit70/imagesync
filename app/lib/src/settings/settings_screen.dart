@@ -40,9 +40,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SwitchListTile(
             value: _settings.showPersistentSendNotification,
-            title: const Text('Show the send clipboard notification'),
+            title: const Text('Keep background sync running'),
             subtitle: const Text(
-              'Controls the always-available clipboard send notification for phone to laptop sync.',
+              'Shows a persistent notification and keeps the relay connection '
+              'alive so laptop payloads arrive while the app is closed. Also '
+              'hosts the Send clipboard shortcut.',
             ),
             onChanged: (value) => _updateSettings(
               _settings.copyWith(showPersistentSendNotification: value),

@@ -123,4 +123,13 @@ class FakeForegroundServiceClient implements ForegroundServiceClient {
   Future<void> update() async {
     updated++;
   }
+
+  @override
+  void addTaskDataCallback(TaskDataCallback callback) {}
+
+  @override
+  void removeTaskDataCallback(TaskDataCallback callback) {}
+
+  @override
+  Future<void> sendToTask(Object data) async {}
 }

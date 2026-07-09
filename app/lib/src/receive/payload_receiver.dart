@@ -6,6 +6,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../shared/payload_crypto.dart';
 import '../shared/wire.dart';
+import 'received_text_repository.dart';
+
+/// Notification payload marking "tap to copy the latest received text".
+const copyLatestTextNotificationPayload = 'imagesync.copy-latest-text';
 
 abstract interface class AndroidClipboard {
   Future<void> writeText(String text);
@@ -45,7 +49,8 @@ class LocalPayloadNotifier implements PayloadNotifier {
   Future<void> showTextReady(String preview) async {
     await _show(
       title: 'ImageSync text ready',
-      body: preview.isEmpty ? 'Text copied to clipboard.' : preview,
+      body: preview.isEmpty ? 'Tap to copy the received text.' : preview,
+      payload: copyLatestTextNotificationPayload,
     );
   }
 
@@ -57,13 +62,18 @@ class LocalPayloadNotifier implements PayloadNotifier {
     );
   }
 
-  Future<void> _show({required String title, required String body}) async {
+  Future<void> _show({
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
     if (!enabled) return;
     await _ensureInitialized();
     await _plugin.show(
       id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
       title: title,
       body: body,
+      payload: payload,
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           'imagesync_payloads',
@@ -110,11 +120,13 @@ class PayloadReceiver {
     required this.crypto,
     required this.clipboard,
     required this.notifier,
+    required this.receivedTextRepository,
   });
 
   final PayloadCrypto crypto;
   final AndroidClipboard clipboard;
   final PayloadNotifier notifier;
+  final ReceivedTextRepository receivedTextRepository;
 
   Future<PayloadReceiveResult> receive({
     required PayloadFrame frame,
@@ -128,10 +140,13 @@ class PayloadReceiver {
       switch (frame.type) {
         case PayloadType.text:
           final text = utf8.decode(plaintext);
-          await clipboard.writeText(text);
+          await receivedTextRepository.saveLatest(text);
+          final copied = await _tryWriteClipboard(text);
           await notifier.showTextReady(_preview(text));
-          return const PayloadReceiveResult.received(
-            'Text copied from laptop.',
+          return PayloadReceiveResult.received(
+            copied
+                ? 'Text copied from laptop.'
+                : 'Text received. Tap the notification to copy.',
           );
         case PayloadType.image:
           await notifier.showImageReady(frame.mime);
@@ -141,6 +156,17 @@ class PayloadReceiver {
       }
     } on Object catch (error) {
       return PayloadReceiveResult.failed('Receive failed: $error');
+    }
+  }
+
+  /// Android 10+ (and MIUI in particular) can reject clipboard writes from
+  /// a background service; the notification tap is the guaranteed path.
+  Future<bool> _tryWriteClipboard(String text) async {
+    try {
+      await clipboard.writeText(text);
+      return true;
+    } on Object {
+      return false;
     }
   }
 

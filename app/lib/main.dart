@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -8,6 +10,9 @@ import 'src/foreground/imagesync_foreground_service.dart';
 import 'src/foreground/send_clipboard_screen.dart';
 import 'src/pairing/pairing_code.dart';
 import 'src/pairing/pairing_repository.dart';
+import 'src/receive/payload_receiver.dart';
+import 'src/receive/receive_notification_tap_handler.dart';
+import 'src/receive/received_text_repository.dart';
 import 'src/share/share_intake_controller.dart';
 import 'src/share/share_publisher.dart';
 import 'src/settings/app_settings.dart';
@@ -29,6 +34,10 @@ void main() {
       foregroundServiceClient: ImageSyncForegroundServiceClient(),
       pairingRepository: PairingRepository(const SecurePairingStorage()),
       shareSource: const ReceiveSharingIntentSource(),
+      receiveNotificationTapHandler: ReceiveNotificationTapHandler(
+        repository: const ReceivedTextRepository(SecureReceivedTextStorage()),
+        clipboard: const FlutterAndroidClipboard(),
+      ),
     ),
   );
 }
@@ -41,6 +50,7 @@ class ImageSyncApp extends StatelessWidget {
     required this.pairingRepository,
     this.relayConnectionFactory,
     this.shareSource,
+    this.receiveNotificationTapHandler,
   });
 
   final AppSettingsRepository appSettingsRepository;
@@ -48,6 +58,7 @@ class ImageSyncApp extends StatelessWidget {
   final PairingRepository pairingRepository;
   final RelayConnectionFactory? relayConnectionFactory;
   final ShareSource? shareSource;
+  final ReceiveNotificationTapHandler? receiveNotificationTapHandler;
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +109,7 @@ class ImageSyncApp extends StatelessWidget {
             pairingRepository: pairingRepository,
             relayConnectionFactory: connectionFactory,
             shareSource: shareSource,
+            receiveNotificationTapHandler: receiveNotificationTapHandler,
           ),
           settings: settings,
         );
@@ -122,6 +134,7 @@ class PairingScreen extends StatefulWidget {
     required this.pairingRepository,
     required this.relayConnectionFactory,
     this.shareSource,
+    this.receiveNotificationTapHandler,
   });
 
   final AppSettingsRepository appSettingsRepository;
@@ -129,6 +142,7 @@ class PairingScreen extends StatefulWidget {
   final PairingRepository pairingRepository;
   final RelayConnectionFactory relayConnectionFactory;
   final ShareSource? shareSource;
+  final ReceiveNotificationTapHandler? receiveNotificationTapHandler;
 
   @override
   State<PairingScreen> createState() => _PairingScreenState();
@@ -154,6 +168,13 @@ class _PairingScreenState extends State<PairingScreen> {
   void initState() {
     super.initState();
     widget.foregroundServiceClient.addTaskDataCallback(_onServiceData);
+    final tapHandler = widget.receiveNotificationTapHandler;
+    if (tapHandler != null) {
+      tapHandler.onCopied = (message) {
+        if (mounted) setState(() => _receiveStatus = message);
+      };
+      unawaited(tapHandler.init());
+    }
     _loadPairing();
   }
 

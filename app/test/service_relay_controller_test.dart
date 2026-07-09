@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:imagesync/src/foreground/service_relay_controller.dart';
 import 'package:imagesync/src/pairing/pairing_code.dart';
 import 'package:imagesync/src/receive/payload_receiver.dart';
+import 'package:imagesync/src/receive/received_text_repository.dart';
 import 'package:imagesync/src/settings/app_settings.dart';
 import 'package:imagesync/src/shared/payload_crypto.dart';
 import 'package:imagesync/src/shared/relay_connection.dart';
@@ -178,6 +179,9 @@ class _Harness {
         crypto: PayloadCrypto(),
         clipboard: clipboard,
         notifier: _SilentNotifier(),
+        receivedTextRepository: ReceivedTextRepository(
+          MemoryReceivedTextStorage(),
+        ),
       ),
       emit: emitted.add,
       updateNotification: (title, text) async {

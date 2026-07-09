@@ -4,6 +4,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../pairing/pairing_repository.dart';
 import '../receive/payload_receiver.dart';
+import '../receive/received_text_repository.dart';
 import '../settings/app_settings_repository.dart';
 import '../shared/payload_crypto.dart';
 import '../shared/relay_connection.dart';
@@ -44,6 +45,9 @@ class ImageSyncForegroundTaskHandler extends TaskHandler {
       receiverFactory: (settings) => PayloadReceiver(
         crypto: PayloadCrypto(),
         clipboard: const FlutterAndroidClipboard(),
+        receivedTextRepository: const ReceivedTextRepository(
+          SecureReceivedTextStorage(),
+        ),
         notifier: LocalPayloadNotifier(
           enabled: settings.showReceiveNotifications,
           requestPermissionOnInit: false,

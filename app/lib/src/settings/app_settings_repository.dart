@@ -43,6 +43,8 @@ class AppSettingsRepository {
       'imagesync.settings.showReceiveNotifications';
   static const _showPersistentSendNotificationKey =
       'imagesync.settings.showPersistentSendNotification';
+  static const _autoPushScreenshotsKey =
+      'imagesync.settings.autoPushScreenshots';
   static const _miuiClipboardHintShownKey =
       'imagesync.settings.miuiClipboardHintShown';
 
@@ -52,10 +54,12 @@ class AppSettingsRepository {
     final values = await Future.wait([
       _storage.read(_showReceiveNotificationsKey),
       _storage.read(_showPersistentSendNotificationKey),
+      _storage.read(_autoPushScreenshotsKey),
     ]);
     return AppSettings(
       showReceiveNotifications: _readBool(values[0], fallback: true),
       showPersistentSendNotification: _readBool(values[1], fallback: true),
+      autoPushScreenshots: _readBool(values[2], fallback: true),
     );
   }
 
@@ -68,6 +72,10 @@ class AppSettingsRepository {
       _storage.write(
         _showPersistentSendNotificationKey,
         settings.showPersistentSendNotification.toString(),
+      ),
+      _storage.write(
+        _autoPushScreenshotsKey,
+        settings.autoPushScreenshots.toString(),
       ),
     ]);
   }

@@ -6,6 +6,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Screenshot observer (screenshot-observer spec §5): full media-read is
+         mandatory — a partial "Select photos" grant silently filters the
+         observer's query to the user-picked set and breaks detection. Do NOT
+         declare READ_MEDIA_VISUAL_USER_SELECTED: it opts into that partial flow
+         as a first-class outcome. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+                     android:maxSdkVersion="32" />
     <!-- Overlay grant exempts the app from background-activity-start blocks,
          which Android 12+ applies to notification-button launches (the
          "Send clipboard" action) and MIUI enforces extra strictly. -->

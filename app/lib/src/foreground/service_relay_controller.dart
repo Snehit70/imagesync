@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
+import 'package:screenshot_observer/screenshot_observer.dart';
+
 import '../pairing/pairing_code.dart';
 import '../receive/payload_receiver.dart';
 import '../settings/app_settings.dart';
@@ -44,6 +47,7 @@ class ServiceRelayController {
     required this.receiverFactory,
     required this.emit,
     required this.updateNotification,
+    this.screenshotWatcher,
     this.deviceId = 'phone',
     this.reconnectBackoff = defaultReconnectBackoff,
   });
@@ -54,6 +58,14 @@ class ServiceRelayController {
   final ServiceReceiverFactory receiverFactory;
   final ServiceEmit emit;
   final ServiceNotificationUpdate updateNotification;
+
+  /// Optional collaborator (injected like [connectionFactory] to keep this
+  /// class testable). When present, [_sync] starts it while
+  /// [AppSettings.autoPushScreenshots] is on and photo access is `full`, and
+  /// pauses otherwise. Its lifetime spans reconnects — only [stop] tears it
+  /// down. Screenshots it emits are the push pipeline's input (#28).
+  final ScreenshotWatcher? screenshotWatcher;
+
   final String deviceId;
   final List<Duration> reconnectBackoff;
 
@@ -61,6 +73,10 @@ class ServiceRelayController {
   PayloadReceiveController? _receiveController;
   StreamSubscription<ConnectionStatus>? _statusSubscription;
   StreamSubscription<RelayEvent>? _eventSubscription;
+  StreamSubscription<ScreenshotEvent>? _screenshotEventsSubscription;
+  StreamSubscription<String>? _screenshotDiagnosticsSubscription;
+  bool _screenshotWatching = false;
+  bool _screenshotPaused = false;
   Timer? _reconnectTimer;
   int _reconnectAttempt = 0;
   bool _stopped = false;
@@ -75,13 +91,19 @@ class ServiceRelayController {
     }
   }
 
-  Future<void> stop() {
+  Future<void> stop() async {
     _stopped = true;
-    return _teardown();
+    await _stopScreenshotWatcher();
+    await _teardown();
   }
 
   Future<void> _sync() async {
     await _teardown();
+    // The observer's lifetime tracks the setting and photo grant, not the relay
+    // connection (§6: always-on while the service runs), so reconcile it before
+    // the pairing check — it must keep watching even while unpaired/offline.
+    final settings = await loadSettings();
+    await _reconcileScreenshotWatcher(settings);
     final pairing = await loadPairing();
     if (pairing == null) {
       _log('No pairing stored; staying offline.');
@@ -89,7 +111,6 @@ class ServiceRelayController {
       return;
     }
     _log('Connecting to relay at ${pairing.host}:${pairing.port}.');
-    final settings = await loadSettings();
     final connection = connectionFactory(pairing);
     _connection = connection;
     _statusSubscription = connection.status.listen((status) {
@@ -133,6 +154,98 @@ class ServiceRelayController {
     }
     _lastHandledFrame = (origin: frame.origin, ts: frame.ts);
     return true;
+  }
+
+  /// Brings the observer in line with the current settings and photo grant.
+  /// Idempotent and safe to call on every [_sync] (including reconnects): a
+  /// watcher already in the right state is left untouched, so the native
+  /// observer isn't churned — and its start watermark isn't reset — on a
+  /// reconnect.
+  Future<void> _reconcileScreenshotWatcher(AppSettings settings) async {
+    final watcher = screenshotWatcher;
+    if (watcher == null) return;
+
+    if (!settings.autoPushScreenshots) {
+      await _stopScreenshotWatcher();
+      _setScreenshotPaused(false);
+      return;
+    }
+
+    final access = await watcher.accessLevel();
+    if (access == ScreenshotAccessLevel.full) {
+      await _startScreenshotWatcher(watcher);
+    } else {
+      // Setting on but access isn't full: the observer can't work (§5). Stop it
+      // and surface the paused state; recovery is a Settings deep-link in the UI.
+      await _stopScreenshotWatcher();
+      _setScreenshotPaused(true, access: access);
+    }
+  }
+
+  Future<void> _startScreenshotWatcher(ScreenshotWatcher watcher) async {
+    if (_screenshotWatching) {
+      _setScreenshotPaused(false);
+      return;
+    }
+    _screenshotEventsSubscription = watcher.events.listen(_onScreenshotEvent);
+    _screenshotDiagnosticsSubscription = watcher.diagnostics.listen(_log);
+    try {
+      await watcher.start();
+      _screenshotWatching = true;
+      _setScreenshotPaused(false);
+      _log('Screenshot observer started.');
+    } on PlatformException catch (error) {
+      // Access downgraded between the check and start(); treat as paused.
+      await _cancelScreenshotSubscriptions();
+      _log(
+        'Screenshot observer refused to start: ${error.code} '
+        '(${error.message}).',
+        isError: true,
+      );
+      _setScreenshotPaused(true);
+    }
+  }
+
+  Future<void> _stopScreenshotWatcher() async {
+    await _cancelScreenshotSubscriptions();
+    if (!_screenshotWatching) return;
+    _screenshotWatching = false;
+    try {
+      await screenshotWatcher?.stop();
+    } catch (error) {
+      _log('Screenshot observer stop failed: $error', isError: true);
+    }
+    _log('Screenshot observer stopped.');
+  }
+
+  Future<void> _cancelScreenshotSubscriptions() async {
+    await _screenshotEventsSubscription?.cancel();
+    _screenshotEventsSubscription = null;
+    await _screenshotDiagnosticsSubscription?.cancel();
+    _screenshotDiagnosticsSubscription = null;
+  }
+
+  /// Logs the "event emitted" stage (§7) — the observer spec's scope ends at a
+  /// screenshot delivered to this isolate. The push pipeline (#28) hangs off
+  /// this callback.
+  void _onScreenshotEvent(ScreenshotEvent event) {
+    _log(
+      'Screenshot emitted: id=${event.id} name=${event.displayName} '
+      'size=${event.sizeBytes} detectedAt=${event.detectedAtEpochMillis}',
+    );
+  }
+
+  void _setScreenshotPaused(bool paused, {ScreenshotAccessLevel? access}) {
+    if (_screenshotPaused == paused) return;
+    _screenshotPaused = paused;
+    emit({'kind': 'screenshotAccess', 'paused': paused, 'level': access?.name});
+    if (paused) {
+      _log(
+        'Auto-send screenshots paused — allow all photos '
+        '(access: ${access?.name ?? 'unknown'}).',
+        isError: true,
+      );
+    }
   }
 
   void _scheduleReconnect() {
@@ -184,19 +297,33 @@ class ServiceRelayController {
 
   Future<void> _publishStatus(ConnectionStatus status) async {
     emit({'kind': 'status', 'status': status.name});
-    await updateNotification(
-      switch (status) {
-        ConnectionStatus.connected => 'ImageSync connected',
-        ConnectionStatus.searching => 'ImageSync connecting',
-        ConnectionStatus.offline => 'ImageSync offline',
-      },
-      switch (status) {
-        ConnectionStatus.connected =>
-          'Receiving from the laptop. Tap Send clipboard to push phone text.',
+    final (title, text) = _notificationCopy(status);
+    await updateNotification(title, text);
+  }
+
+  (String, String) _notificationCopy(ConnectionStatus status) {
+    final title = switch (status) {
+      ConnectionStatus.connected => 'ImageSync connected',
+      ConnectionStatus.searching => 'ImageSync connecting',
+      ConnectionStatus.offline => 'ImageSync offline',
+    };
+    if (_screenshotPaused) {
+      // The paused state is persistent and recovery-worthy (§5), so it overrides
+      // the connection copy. WP7 refines this surface; the claim stays intact.
+      final base = switch (status) {
+        ConnectionStatus.connected => 'Receiving from the laptop.',
         ConnectionStatus.searching => 'Looking for the laptop relay...',
-        ConnectionStatus.offline =>
-          'Relay unreachable. Open the app to reconnect.',
-      },
-    );
+        ConnectionStatus.offline => 'Relay unreachable.',
+      };
+      return (title, '$base Auto-send screenshots paused — allow all photos.');
+    }
+    final text = switch (status) {
+      ConnectionStatus.connected =>
+        'Receiving from the laptop. Tap Send clipboard to push phone text.',
+      ConnectionStatus.searching => 'Looking for the laptop relay...',
+      ConnectionStatus.offline =>
+        'Relay unreachable. Open the app to reconnect.',
+    };
+    return (title, text);
   }
 }

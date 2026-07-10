@@ -11,6 +11,7 @@ void main() {
       const AppSettings(
         showReceiveNotifications: true,
         showPersistentSendNotification: true,
+        autoPushScreenshots: true,
       ),
     );
   });
@@ -21,6 +22,7 @@ void main() {
     const settings = AppSettings(
       showReceiveNotifications: false,
       showPersistentSendNotification: false,
+      autoPushScreenshots: false,
     );
 
     await repository.save(settings);

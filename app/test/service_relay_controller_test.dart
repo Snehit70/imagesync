@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:screenshot_observer/screenshot_observer.dart';
 
 import 'package:imagesync/src/foreground/service_relay_controller.dart';
 import 'package:imagesync/src/pairing/pairing_code.dart';
@@ -282,6 +284,130 @@ void main() {
 
     expect(harness.transports.single.closed, isTrue);
   });
+
+  group('screenshot watcher', () {
+    test('starts the watcher when auto-push is on and access is full', () async {
+      final watcher = _FakeScreenshotWatcher();
+      final harness = _Harness(pairing: pairing, screenshotWatcher: watcher);
+
+      await harness.controller.start();
+
+      expect(watcher.starts, 1);
+      expect(watcher.watching, isTrue);
+      expect(
+        harness.emitted,
+        contains(
+          equals({
+            'kind': 'log',
+            'message': 'Screenshot observer started.',
+            'error': false,
+          }),
+        ),
+      );
+    });
+
+    test('does not start the watcher when auto-push is off', () async {
+      final watcher = _FakeScreenshotWatcher();
+      final harness = _Harness(
+        pairing: pairing,
+        settings: const AppSettings(autoPushScreenshots: false),
+        screenshotWatcher: watcher,
+      );
+
+      await harness.controller.start();
+
+      expect(watcher.starts, 0);
+      expect(watcher.watching, isFalse);
+    });
+
+    test('enters the paused state on partial access', () async {
+      final watcher = _FakeScreenshotWatcher(
+        access: ScreenshotAccessLevel.partial,
+      );
+      final harness = _Harness(pairing: pairing, screenshotWatcher: watcher);
+
+      await harness.controller.start();
+
+      expect(watcher.starts, 0);
+      expect(
+        harness.emitted,
+        contains(
+          equals({
+            'kind': 'screenshotAccess',
+            'paused': true,
+            'level': 'partial',
+          }),
+        ),
+      );
+      // The connected notification carries the paused text (§5).
+      final transport = harness.transports.single;
+      transport.receive({'v': 1, 'kind': 'auth_ok'});
+      await _drain();
+      expect(
+        harness.notifications.map((n) => n.text),
+        contains(contains('Auto-send screenshots paused')),
+      );
+    });
+
+    test('logs the emitted stage for each screenshot event', () async {
+      final watcher = _FakeScreenshotWatcher();
+      final harness = _Harness(pairing: pairing, screenshotWatcher: watcher);
+
+      await harness.controller.start();
+      watcher.emitDiagnostic('screenshot onChange uri=content://x');
+      watcher.emitEvent(_screenshotEvent(id: 42));
+      await _drain();
+
+      expect(
+        harness.emitted,
+        containsAll([
+          {
+            'kind': 'log',
+            'message': 'screenshot onChange uri=content://x',
+            'error': false,
+          },
+          {
+            'kind': 'log',
+            'message':
+                'Screenshot emitted: id=42 name=Screenshot_42.png '
+                'size=1000 detectedAt=1783608202412',
+            'error': false,
+          },
+        ]),
+      );
+    });
+
+    test('keeps the observer running across a reconnect', () async {
+      final watcher = _FakeScreenshotWatcher();
+      final harness = _Harness(
+        pairing: pairing,
+        reconnectBackoff: const [Duration(milliseconds: 20)],
+        screenshotWatcher: watcher,
+      );
+
+      await harness.controller.start();
+      expect(watcher.starts, 1);
+
+      await harness.transports.single.drop();
+      await _waitUntil(() => harness.transports.length == 2);
+
+      // The reconnect re-runs _sync but must not churn the observer.
+      expect(watcher.starts, 1);
+      expect(watcher.stops, 0);
+      expect(watcher.watching, isTrue);
+    });
+
+    test('stop tears the watcher down', () async {
+      final watcher = _FakeScreenshotWatcher();
+      final harness = _Harness(pairing: pairing, screenshotWatcher: watcher);
+
+      await harness.controller.start();
+      await harness.controller.stop();
+
+      expect(watcher.stops, 1);
+      expect(watcher.watching, isFalse);
+    });
+  });
 }
 
 Future<void> _drain() => pumpEventQueue(times: 200);
@@ -317,11 +443,14 @@ class _Harness {
     required this.pairing,
     // Effectively "never" so tests without a reconnect stay deterministic.
     List<Duration> reconnectBackoff = const [Duration(minutes: 5)],
+    this.settings = const AppSettings(),
+    this.screenshotWatcher,
   }) {
     controller = ServiceRelayController(
       reconnectBackoff: reconnectBackoff,
+      screenshotWatcher: screenshotWatcher,
       loadPairing: () async => pairing,
-      loadSettings: () async => const AppSettings(),
+      loadSettings: () async => settings,
       connectionFactory: (pairing) {
         final transport = _FakeTransport();
         transports.add(transport);
@@ -353,6 +482,8 @@ class _Harness {
   }
 
   PairingCode? pairing;
+  AppSettings settings;
+  final _FakeScreenshotWatcher? screenshotWatcher;
   late final ServiceRelayController controller;
   final transports = <_FakeTransport>[];
   final emitted = <Map<String, Object?>>[];
@@ -406,4 +537,57 @@ class _SilentNotifier implements PayloadNotifier {
 
   @override
   Future<void> showMiuiClipboardHint() async {}
+}
+
+class _FakeScreenshotWatcher implements ScreenshotWatcher {
+  _FakeScreenshotWatcher({this.access = ScreenshotAccessLevel.full});
+
+  ScreenshotAccessLevel access;
+  int starts = 0;
+  int stops = 0;
+  bool watching = false;
+  bool failStart = false;
+
+  final _events = StreamController<ScreenshotEvent>.broadcast();
+  final _diagnostics = StreamController<String>.broadcast();
+
+  void emitEvent(ScreenshotEvent event) => _events.add(event);
+
+  void emitDiagnostic(String message) => _diagnostics.add(message);
+
+  @override
+  Future<ScreenshotAccessLevel> accessLevel() async => access;
+
+  @override
+  Future<void> start() async {
+    starts++;
+    if (failStart) {
+      throw PlatformException(code: 'no-permission', message: access.name);
+    }
+    watching = true;
+  }
+
+  @override
+  Future<void> stop() async {
+    stops++;
+    watching = false;
+  }
+
+  @override
+  Stream<ScreenshotEvent> get events => _events.stream;
+
+  @override
+  Stream<String> get diagnostics => _diagnostics.stream;
+}
+
+ScreenshotEvent _screenshotEvent({int id = 1}) {
+  return ScreenshotEvent(
+    id: id,
+    uri: 'content://media/external/images/media/$id',
+    displayName: 'Screenshot_$id.png',
+    mimeType: 'image/png',
+    sizeBytes: 1000,
+    dateAddedEpochSeconds: 1783608202,
+    detectedAtEpochMillis: 1783608202412,
+  );
 }

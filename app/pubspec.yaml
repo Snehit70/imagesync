@@ -46,6 +46,8 @@ dependencies:
   google_fonts: ^8.1.0
   imagesync_clipboard:
     path: packages/imagesync_clipboard
+  screenshot_observer:
+    path: packages/screenshot_observer
 dev_dependencies:
   flutter_test:
     sdk: flutter

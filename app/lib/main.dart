@@ -15,8 +15,13 @@ import 'src/foreground/foreground_service_client.dart';
 import 'src/foreground/foreground_service_coordinator.dart';
 import 'src/foreground/imagesync_foreground_service.dart';
 import 'src/foreground/send_clipboard_screen.dart';
+import 'src/onboarding/onboarding_wizard.dart';
+import 'src/onboarding/setup_actions.dart';
+import 'src/onboarding/setup_checklist_screen.dart';
+import 'src/onboarding/setup_status.dart';
 import 'src/pairing/pairing_code.dart';
 import 'src/pairing/pairing_repository.dart';
+import 'src/pairing/pairing_widgets.dart';
 import 'src/pairing/relay_discovery.dart';
 import 'src/receive/payload_receiver.dart';
 import 'src/receive/receive_notification_tap_handler.dart';
@@ -57,6 +62,7 @@ void main() {
         clipboard: const FlutterAndroidClipboard(),
         imageClipboard: const ChannelAndroidImageClipboard(),
       ),
+      setupActions: PlatformSetupActions(),
     ),
   );
 }
@@ -72,6 +78,7 @@ class ImageSyncApp extends StatelessWidget {
     this.shareSource,
     this.receiveNotificationTapHandler,
     this.debugLog,
+    this.setupActions,
   });
 
   final AppSettingsRepository appSettingsRepository;
@@ -82,6 +89,11 @@ class ImageSyncApp extends StatelessWidget {
   final ShareSource? shareSource;
   final ReceiveNotificationTapHandler? receiveNotificationTapHandler;
   final DebugLog? debugLog;
+
+  /// Platform probes behind onboarding and the setup checklist. When null
+  /// (widget tests without platform channels) the wizard, banner, and
+  /// Setup-status row are disabled.
+  final SetupActions? setupActions;
 
   @override
   Widget build(BuildContext context) {
@@ -119,6 +131,7 @@ class ImageSyncApp extends StatelessWidget {
             shareSource: shareSource,
             receiveNotificationTapHandler: receiveNotificationTapHandler,
             debugLog: log,
+            setupActions: setupActions,
           ),
           settings: settings,
         );
@@ -146,6 +159,7 @@ class PairingScreen extends StatefulWidget {
     this.shareSource,
     this.receiveNotificationTapHandler,
     this.debugLog,
+    this.setupActions,
   });
 
   final AppSettingsRepository appSettingsRepository;
@@ -156,12 +170,14 @@ class PairingScreen extends StatefulWidget {
   final ShareSource? shareSource;
   final ReceiveNotificationTapHandler? receiveNotificationTapHandler;
   final DebugLog? debugLog;
+  final SetupActions? setupActions;
 
   @override
   State<PairingScreen> createState() => _PairingScreenState();
 }
 
-class _PairingScreenState extends State<PairingScreen> {
+class _PairingScreenState extends State<PairingScreen>
+    with WidgetsBindingObserver {
   final _hostController = TextEditingController();
   final _portController = TextEditingController(text: '17321');
   final _secretController = TextEditingController();
@@ -181,9 +197,23 @@ class _PairingScreenState extends State<PairingScreen> {
   bool _loading = true;
   late final DebugLog _debugLog = widget.debugLog ?? sharedDebugLog;
 
+  /// Live "connected" flag mirrored into the wizard's finale (D2).
+  final _connectedNotifier = ValueNotifier<bool>(false);
+  SetupStatus? _setupStatus;
+
+  /// D6 loader shared by the banner, the checklist, and the Settings chip.
+  late final SetupStatusLoader? _setupLoader = widget.setupActions == null
+      ? null
+      : SetupStatusLoader(
+          actions: widget.setupActions!,
+          settingsRepository: widget.appSettingsRepository,
+          pairingRepository: widget.pairingRepository,
+        );
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.foregroundServiceClient.addTaskDataCallback(_onServiceData);
     final tapHandler = widget.receiveNotificationTapHandler;
     if (tapHandler != null) {
@@ -196,8 +226,17 @@ class _PairingScreenState extends State<PairingScreen> {
     _loadPairing();
   }
 
+  /// Recompute the D6 snapshot on resume so the home banner tracks external
+  /// changes (revoking photos in system settings).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_refreshSetupStatus());
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _connectedNotifier.dispose();
     widget.foregroundServiceClient.removeTaskDataCallback(_onServiceData);
     _shareIntakeController?.dispose();
     _hostController.dispose();
@@ -219,6 +258,7 @@ class _PairingScreenState extends State<PairingScreen> {
             'Status: ${status.name}',
             isError: status == ConnectionStatus.offline,
           );
+          _connectedNotifier.value = status == ConnectionStatus.connected;
           setState(() => _connectionStatus = status);
         }
       case 'receive':
@@ -271,7 +311,63 @@ class _PairingScreenState extends State<PairingScreen> {
     });
     await _syncForegroundService();
     await _startShareIntake();
+    await _refreshSetupStatus();
+    if (_setupLoader != null &&
+        !(await widget.appSettingsRepository.onboardingComplete())) {
+      // First run: the wizard is the whole surface until finished or skipped
+      // through; gated by onboardingComplete, never force-re-shown (D1).
+      if (mounted) await _openWizard();
+      return;
+    }
     if (pairing == null) await _discoverRelays();
+  }
+
+  Future<void> _refreshSetupStatus() async {
+    final loader = _setupLoader;
+    if (loader == null) return;
+    final status = await loader.load();
+    if (mounted) setState(() => _setupStatus = status);
+  }
+
+  Future<void> _openWizard() async {
+    final actions = widget.setupActions;
+    if (actions == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => OnboardingWizard(
+          actions: actions,
+          settingsRepository: widget.appSettingsRepository,
+          relayDiscovery: widget.relayDiscovery,
+          connectionStatus: _connectedNotifier,
+          onScanQr: () => Navigator.of(context).push<String>(
+            MaterialPageRoute(builder: (_) => const QrPairingScreen()),
+          ),
+          savePairing: (pairing) async {
+            await widget.pairingRepository.save(pairing);
+            if (mounted) {
+              setState(() {
+                _pairing = pairing;
+                _error = null;
+                _connectionStatus = ConnectionStatus.searching;
+              });
+            }
+            await _syncForegroundService();
+            return null;
+          },
+        ),
+      ),
+    );
+    await _refreshSetupStatus();
+    if (_pairing == null) await _discoverRelays();
+  }
+
+  Future<void> _openChecklist() async {
+    final loader = _setupLoader;
+    if (loader == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => SetupChecklistScreen(loader: loader)),
+    );
+    await _refreshSetupStatus();
   }
 
   Future<void> _discoverRelays() async {
@@ -384,10 +480,14 @@ class _PairingScreenState extends State<PairingScreen> {
   Future<void> _openSettings() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) =>
-            SettingsScreen(settings: _settings, onChanged: _updateSettings),
+        builder: (_) => SettingsScreen(
+          settings: _settings,
+          onChanged: _updateSettings,
+          setupLoader: _setupLoader,
+        ),
       ),
     );
+    await _refreshSetupStatus();
   }
 
   Future<void> _updateSettings(AppSettings settings) async {
@@ -457,6 +557,17 @@ class _PairingScreenState extends State<PairingScreen> {
               },
               searching: _connectionStatus == ConnectionStatus.searching,
             ).entrance(0),
+            if (_setupStatus?.bannerNeeded(_settings) ?? false) ...[
+              const SizedBox(height: 16),
+              _SetupBanner(
+                label: _setupStatus!.bannerLabel(_settings),
+                onTap: () => unawaited(
+                  _setupStatus!.onboardingComplete
+                      ? _openChecklist()
+                      : _openWizard(),
+                ),
+              ).entrance(1),
+            ],
             if (_shareStatus != null) ...[
               const SizedBox(height: 12),
               _ShareStatusCard(message: _shareStatus!).entrance(1),
@@ -476,7 +587,7 @@ class _PairingScreenState extends State<PairingScreen> {
               ).entrance(2)
             else ...[
               if (widget.relayDiscovery != null) ...[
-                _NearbyRelaysCard(
+                NearbyRelaysCard(
                   relays: _nearbyRelays,
                   selected: _selectedRelay,
                   discovering: _discovering,
@@ -485,7 +596,7 @@ class _PairingScreenState extends State<PairingScreen> {
                 ).entrance(2),
                 const SizedBox(height: 28),
               ],
-              _ManualPairingForm(
+              ManualPairingForm(
                 hostController: _hostController,
                 portController: _portController,
                 secretController: _secretController,
@@ -633,202 +744,50 @@ class _ShareStatusCard extends StatelessWidget {
   }
 }
 
-class _NearbyRelaysCard extends StatelessWidget {
-  const _NearbyRelaysCard({
-    required this.relays,
-    required this.selected,
-    required this.discovering,
-    required this.onRefresh,
-    required this.onSelect,
-  });
+/// Home banner (onboarding spec D1): "Finish setup" while onboarding is
+/// incomplete, or the most actionable degradation afterwards. Tapping opens
+/// the wizard resp. the checklist.
+class _SetupBanner extends StatelessWidget {
+  const _SetupBanner({required this.label, required this.onTap});
 
-  final List<DiscoveredRelay> relays;
-  final DiscoveredRelay? selected;
-  final bool discovering;
-  final VoidCallback onRefresh;
-  final ValueChanged<DiscoveredRelay> onSelect;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            if (discovering) ...[
-              const PulsingDot(size: 8),
-              const SizedBox(width: 4),
-            ],
-            Expanded(
-              child: Text('Nearby relays', style: textTheme.titleMedium),
-            ),
-            if (!discovering)
-              IconButton(
-                tooltip: 'Search again',
-                icon: const Icon(Icons.refresh, size: 20),
-                style: IconButton.styleFrom(
-                  backgroundColor: Palette.mist,
-                  foregroundColor: Palette.raspberry,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+    return PressableScale(
+      child: Material(
+        color: Palette.petal,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.tune,
+                  size: 20,
+                  color: Palette.raspberry,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
                 ),
-                onPressed: onRefresh,
-              ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        if (relays.isEmpty)
-          Text(
-            discovering
-                ? 'Searching for relays on this network…'
-                : 'No relays found. Make sure the laptop relay is running, '
-                      'or pair manually below.',
-            style: textTheme.bodyMedium?.copyWith(color: Palette.muted),
-          )
-        else
-          for (final relay in relays)
-            Card(
-              margin: const EdgeInsets.only(bottom: 10),
-              child: ListTile(
-                leading: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Palette.petal,
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  child: const Icon(
-                    Icons.dns,
-                    size: 20,
-                    color: Palette.raspberry,
-                  ),
+                const Icon(
+                  Icons.chevron_right,
+                  size: 20,
+                  color: Palette.raspberry,
                 ),
-                title: Text(relay.name, style: textTheme.titleSmall),
-                subtitle: Text(
-                  '${relay.host}:${relay.port}',
-                  style: textTheme.bodySmall?.copyWith(color: Palette.muted),
-                ),
-                trailing: relay == selected
-                    ? const Icon(Icons.check_circle, color: Palette.raspberry)
-                    : null,
-                onTap: () => onSelect(relay),
-              ),
-            ),
-        if (selected != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            'Enter the pairing secret below and tap Pair manually.',
-            style: textTheme.bodyMedium?.copyWith(color: Palette.muted),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _ManualPairingForm extends StatelessWidget {
-  const _ManualPairingForm({
-    required this.hostController,
-    required this.portController,
-    required this.secretController,
-    required this.error,
-    required this.onScanQr,
-    required this.onPair,
-  });
-
-  final TextEditingController hostController;
-  final TextEditingController portController;
-  final TextEditingController secretController;
-  final String? error;
-  final VoidCallback onScanQr;
-  final VoidCallback onPair;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Manual pairing',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: hostController,
-          decoration: const InputDecoration(
-            labelText: 'Relay IP',
-            prefixIcon: Icon(Icons.router),
-          ),
-          keyboardType: TextInputType.url,
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: portController,
-          decoration: const InputDecoration(
-            labelText: 'Port',
-            prefixIcon: Icon(Icons.settings_ethernet),
-          ),
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: secretController,
-          decoration: const InputDecoration(
-            labelText: 'Pairing secret',
-            prefixIcon: Icon(Icons.key),
-          ),
-          obscureText: true,
-        ),
-        if (error != null) ...[
-          const SizedBox(height: 12),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: Palette.mist,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.error_outline,
-                    size: 18,
-                    color: Palette.error,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      error!,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Palette.error,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ),
           ),
-        ],
-        const SizedBox(height: 20),
-        PressableScale(
-          child: FilledButton.icon(
-            onPressed: onPair,
-            icon: const Icon(Icons.link),
-            label: const Text('Pair manually'),
-          ),
         ),
-        const SizedBox(height: 12),
-        PressableScale(
-          child: OutlinedButton.icon(
-            onPressed: onScanQr,
-            icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('Scan QR'),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

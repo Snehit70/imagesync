@@ -95,6 +95,23 @@ class ImagesyncClipboardPlugin :
                     result.error("open-settings", error.message, null)
                 }
             }
+            "manufacturer" -> result.success(android.os.Build.MANUFACTURER)
+            "openAutostartSettings" -> {
+                try {
+                    openAutostartSettings()
+                    result.success(null)
+                } catch (error: Exception) {
+                    result.error("open-settings", error.message, null)
+                }
+            }
+            "openBatterySaverSettings" -> {
+                try {
+                    openBatterySaverSettings()
+                    result.success(null)
+                } catch (error: Exception) {
+                    result.error("open-settings", error.message, null)
+                }
+            }
             else -> result.notImplemented()
         }
     }
@@ -135,8 +152,48 @@ class ImagesyncClipboardPlugin :
             putExtra("extra_pkgname", context.packageName)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        val intent = if (editor.resolveActivity(context.packageManager) != null) {
-            editor
+        startResolvedOrFallback(editor)
+    }
+
+    // Community-known MIUI autostart manager (onboarding spec D5): the action
+    // form first, then the security-center activity by component, then the
+    // standard app-details screen.
+    private fun openAutostartSettings() {
+        val byAction = Intent("miui.intent.action.OP_AUTO_START").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (byAction.resolveActivity(context.packageManager) != null) {
+            context.startActivity(byAction)
+            return
+        }
+        val byComponent = Intent().apply {
+            component = android.content.ComponentName(
+                "com.miui.securitycenter",
+                "com.miui.permcenter.autostart.AutoStartManagementActivity"
+            )
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startResolvedOrFallback(byComponent)
+    }
+
+    // Community-known MIUI power-keeper per-app battery-saver page (D5);
+    // app-details fallback elsewhere.
+    private fun openBatterySaverSettings() {
+        val powerKeeper = Intent().apply {
+            component = android.content.ComponentName(
+                "com.miui.powerkeeper",
+                "com.miui.powerkeeper.ui.HiddenAppsConfigActivity"
+            )
+            putExtra("package_name", context.packageName)
+            putExtra("package_label", "ImageSync")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startResolvedOrFallback(powerKeeper)
+    }
+
+    private fun startResolvedOrFallback(preferred: Intent) {
+        val intent = if (preferred.resolveActivity(context.packageManager) != null) {
+            preferred
         } else {
             Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                 data = Uri.fromParts("package", context.packageName, null)

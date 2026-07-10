@@ -1,3 +1,7 @@
+/// The four MIUI setup items the app cannot verify (onboarding spec D5);
+/// self-reported "I did this" checkboxes persisted in settings storage.
+enum MiuiSetupFlag { autostart, battery, lockInRecents, clipboard }
+
 class AppSettings {
   const AppSettings({
     this.showReceiveNotifications = true,

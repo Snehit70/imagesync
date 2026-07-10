@@ -93,6 +93,43 @@ class AppSettingsRepository {
   Future<void> markMiuiClipboardHintShown() {
     return _storage.write(_miuiClipboardHintShownKey, 'true');
   }
+
+  static const _onboardingCompleteKey =
+      'imagesync.settings.onboardingComplete';
+
+  /// Whether the first-run wizard has been completed (onboarding spec D1).
+  /// Kept out of [AppSettings] like the hint flag: it is written from its own
+  /// flow and must not clobber a concurrent [save].
+  Future<bool> onboardingComplete() async {
+    return _readBool(
+      await _storage.read(_onboardingCompleteKey),
+      fallback: false,
+    );
+  }
+
+  Future<void> markOnboardingComplete() {
+    return _storage.write(_onboardingCompleteKey, 'true');
+  }
+
+  static String _miuiFlagKey(MiuiSetupFlag flag) =>
+      'imagesync.settings.miuiSetup.${flag.name}';
+
+  /// Self-reported MIUI setup checkboxes (onboarding spec D5). Stored per
+  /// item so the service isolate can un-check just the clipboard one on a
+  /// `SecurityException` without racing the UI's writes.
+  Future<Map<MiuiSetupFlag, bool>> loadMiuiSetupFlags() async {
+    final values = await Future.wait(
+      MiuiSetupFlag.values.map((flag) => _storage.read(_miuiFlagKey(flag))),
+    );
+    return {
+      for (final (index, flag) in MiuiSetupFlag.values.indexed)
+        flag: _readBool(values[index], fallback: false),
+    };
+  }
+
+  Future<void> saveMiuiSetupFlag(MiuiSetupFlag flag, bool value) {
+    return _storage.write(_miuiFlagKey(flag), value.toString());
+  }
 }
 
 bool _readBool(String? value, {required bool fallback}) {

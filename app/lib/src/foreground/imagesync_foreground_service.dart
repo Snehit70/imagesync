@@ -11,6 +11,7 @@ import '../push/screenshot_push_controller.dart';
 import '../receive/payload_receiver.dart';
 import '../receive/received_image_repository.dart';
 import '../receive/received_text_repository.dart';
+import '../settings/app_settings.dart';
 import '../settings/app_settings_repository.dart';
 import '../shared/payload_crypto.dart';
 import '../shared/relay_connection.dart';
@@ -80,6 +81,12 @@ class ImageSyncForegroundTaskHandler extends TaskHandler {
         hasShownMiuiClipboardHint: settingsRepository.miuiClipboardHintShown,
         markMiuiClipboardHintShown:
             settingsRepository.markMiuiClipboardHintShown,
+        // D5 feedback loop: a blocked write proves the MIUI clipboard toggle
+        // is off, so the self-reported checklist item re-flags ⚠.
+        onClipboardBlocked: () => settingsRepository.saveMiuiSetupFlag(
+          MiuiSetupFlag.clipboard,
+          false,
+        ),
         log: (message, {isError = false}) => FlutterForegroundTask
             .sendDataToMain({
               'kind': 'log',

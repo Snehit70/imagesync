@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Onboarding battery step (onboarding-permissions D3): direct
+         ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS grant dialog. Play-policy
+         restrictions are irrelevant — Play distribution is out of scope. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Screenshot observer (screenshot-observer spec §5): full media-read is
          mandatory — a partial "Select photos" grant silently filters the
          observer's query to the user-picked set and breaks detection. Do NOT

@@ -179,7 +179,7 @@ void main() {
 
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Notify when laptop payloads arrive'), findsOneWidget);
-    expect(find.text('Keep background sync running'), findsOneWidget);
+    expect(find.text('Background sync'), findsOneWidget);
 
     await tester.tap(
       find.widgetWithText(SwitchListTile, 'Notify when laptop payloads arrive'),
@@ -188,7 +188,7 @@ void main() {
     await tester.tap(
       find.widgetWithText(
         SwitchListTile,
-        'Keep background sync running',
+        'Background sync',
       ),
     );
     await tester.pumpAndSettle();

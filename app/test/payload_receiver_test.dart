@@ -129,6 +129,7 @@ void main() {
       final notifier = FakePayloadNotifier();
       final storage = MemoryReceivedPayloadStorage();
       var hintShown = false;
+      var blockedCallbacks = 0;
       final receiver = PayloadReceiver(
         crypto: PayloadCrypto(),
         clipboard: ThrowingAndroidClipboard(
@@ -143,6 +144,7 @@ void main() {
         receivedImageRepository: imageRepository(storage),
         hasShownMiuiClipboardHint: () async => hintShown,
         markMiuiClipboardHintShown: () async => hintShown = true,
+        onClipboardBlocked: () async => blockedCallbacks += 1,
       );
 
       final first = await receiver.receive(
@@ -165,6 +167,8 @@ void main() {
       expect(notifier.textReceipts.every((receipt) => !receipt.copied), isTrue);
       expect(notifier.miuiHintCount, 1);
       expect(hintShown, isTrue);
+      // The un-check hook fires on every block, not just the first (D5).
+      expect(blockedCallbacks, 2);
     },
   );
 

@@ -243,6 +243,7 @@ class PayloadReceiver {
     required this.receivedImageRepository,
     this.hasShownMiuiClipboardHint,
     this.markMiuiClipboardHintShown,
+    this.onClipboardBlocked,
     this.log,
   });
 
@@ -257,6 +258,11 @@ class PayloadReceiver {
   /// one-time MIUI hint is disabled.
   final Future<bool> Function()? hasShownMiuiClipboardHint;
   final Future<void> Function()? markMiuiClipboardHintShown;
+
+  /// Fired on every blocked clipboard write (not just the first): the
+  /// onboarding checklist un-checks its self-reported MIUI Clipboard item so
+  /// it re-flags ⚠ (onboarding spec D5 feedback loop).
+  final Future<void> Function()? onClipboardBlocked;
 
   /// Debug-log sink; the wiring-bug outcome logs loudly through this.
   final PayloadReceiverLog? log;
@@ -331,6 +337,7 @@ class PayloadReceiver {
 
   Future<void> _maybeShowMiuiHint(ClipboardWriteOutcome outcome) async {
     if (outcome != ClipboardWriteOutcome.blocked) return;
+    await onClipboardBlocked?.call();
     final hasShown = hasShownMiuiClipboardHint;
     final markShown = markMiuiClipboardHintShown;
     if (hasShown == null || markShown == null) return;

@@ -31,6 +31,28 @@ class ImagesyncClipboard {
   Future<void> openClipboardPermissionSettings() {
     return channel.invokeMethod<void>('openClipboardPermissionSettings');
   }
+
+  /// `Build.MANUFACTURER`, lowercased. `xiaomi` covers Xiaomi/Redmi/Poco
+  /// (onboarding spec D4) — sufficient for the target devices, no `ro.miui.*`
+  /// sysprop reading.
+  Future<String> manufacturer() async {
+    final value = await channel.invokeMethod<String>('manufacturer');
+    return (value ?? '').toLowerCase();
+  }
+
+  /// Whether the Xiaomi setup step and checklist section apply (D4).
+  Future<bool> isMiui() async => await manufacturer() == 'xiaomi';
+
+  /// Opens the MIUI autostart manager, falling back to app-details where the
+  /// community-sourced intents don't resolve (D5).
+  Future<void> openAutostartSettings() {
+    return channel.invokeMethod<void>('openAutostartSettings');
+  }
+
+  /// Opens the MIUI per-app battery-saver page, with the same fallback (D5).
+  Future<void> openBatterySaverSettings() {
+    return channel.invokeMethod<void>('openBatterySaverSettings');
+  }
 }
 
 /// Screen-on broadcasts from the native `ACTION_SCREEN_ON` receiver

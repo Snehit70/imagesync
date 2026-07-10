@@ -44,6 +44,8 @@ dependencies:
   receive_sharing_intent: 1.8.1
   flutter_foreground_task: ^9.2.2
   google_fonts: ^8.1.0
+  imagesync_clipboard:
+    path: packages/imagesync_clipboard
 dev_dependencies:
   flutter_test:
     sdk: flutter

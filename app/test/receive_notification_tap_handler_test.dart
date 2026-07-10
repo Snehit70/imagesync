@@ -152,6 +152,50 @@ void main() {
     expect(messages.single, 'No received image to copy.');
   });
 
+  test('opens the clipboard permission settings from the MIUI hint tap',
+      () async {
+    final opener = _FakePermissionSettingsOpener();
+    final tapHandler = ReceiveNotificationTapHandler(
+      repository: ReceivedTextRepository(MemoryReceivedPayloadStorage()),
+      imageRepository: imageRepository(MemoryReceivedPayloadStorage()),
+      clipboard: _FakeClipboard(),
+      imageClipboard: _FakeImageClipboard(),
+      permissionSettingsOpener: opener,
+    );
+
+    await tapHandler.handleResponse(
+      const NotificationResponse(
+        notificationResponseType:
+            NotificationResponseType.selectedNotification,
+        payload: openClipboardPermissionNotificationPayload,
+      ),
+    );
+
+    expect(opener.openCount, 1);
+  });
+
+  test('surfaces a failure to open the clipboard permission settings',
+      () async {
+    final messages = <String>[];
+    final tapHandler = ReceiveNotificationTapHandler(
+      repository: ReceivedTextRepository(MemoryReceivedPayloadStorage()),
+      imageRepository: imageRepository(MemoryReceivedPayloadStorage()),
+      clipboard: _FakeClipboard(),
+      imageClipboard: _FakeImageClipboard(),
+      permissionSettingsOpener: _ThrowingPermissionSettingsOpener(),
+    )..onCopied = messages.add;
+
+    await tapHandler.handleResponse(
+      const NotificationResponse(
+        notificationResponseType:
+            NotificationResponseType.selectedNotification,
+        payload: openClipboardPermissionNotificationPayload,
+      ),
+    );
+
+    expect(messages.single, startsWith('Could not open clipboard settings:'));
+  });
+
   test('surfaces image clipboard write failures instead of throwing',
       () async {
     final storage = MemoryReceivedPayloadStorage();
@@ -198,5 +242,23 @@ class _ThrowingImageClipboard implements AndroidImageClipboard {
   @override
   Future<void> writeImage(ReceivedImage image) async {
     throw StateError('FileProvider rejected the path.');
+  }
+}
+
+class _FakePermissionSettingsOpener
+    implements ClipboardPermissionSettingsOpener {
+  int openCount = 0;
+
+  @override
+  Future<void> open() async {
+    openCount += 1;
+  }
+}
+
+class _ThrowingPermissionSettingsOpener
+    implements ClipboardPermissionSettingsOpener {
+  @override
+  Future<void> open() async {
+    throw StateError('No settings activity resolved.');
   }
 }

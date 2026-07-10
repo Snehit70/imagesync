@@ -27,4 +27,19 @@ void main() {
 
     expect(await AppSettingsRepository(storage).load(), settings);
   });
+
+  test('tracks the one-time MIUI clipboard hint flag', () async {
+    final storage = MemoryAppSettingsStorage();
+    final repository = AppSettingsRepository(storage);
+
+    expect(await repository.miuiClipboardHintShown(), isFalse);
+
+    await repository.markMiuiClipboardHintShown();
+
+    expect(await repository.miuiClipboardHintShown(), isTrue);
+    expect(
+      await AppSettingsRepository(storage).miuiClipboardHintShown(),
+      isTrue,
+    );
+  });
 }

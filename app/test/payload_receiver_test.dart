@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:imagesync/src/receive/payload_receiver.dart';
 import 'package:imagesync/src/receive/received_image_repository.dart';
 import 'package:imagesync/src/receive/received_text_repository.dart';
 import 'package:imagesync/src/shared/payload_crypto.dart';
 import 'package:imagesync/src/shared/wire.dart';
+import 'package:imagesync_clipboard/imagesync_clipboard.dart';
 
 void main() {
   late Directory tempDir;
@@ -26,6 +28,36 @@ void main() {
     );
   }
 
+  Future<PayloadFrame> textFrame(String text, {int ts = 1800000400000}) {
+    return PayloadCrypto().encrypt(
+      metadata: PayloadMetadata(
+        type: PayloadType.text,
+        mime: 'text/plain',
+        origin: 'laptop',
+        ts: ts,
+      ),
+      plaintext: text.codeUnits,
+      pairingSecret: 'pairing-secret',
+    );
+  }
+
+  Future<PayloadFrame> imageFrame(
+    List<int> bytes,
+    String mime, {
+    int ts = 1800000400001,
+  }) {
+    return PayloadCrypto().encrypt(
+      metadata: PayloadMetadata(
+        type: PayloadType.image,
+        mime: mime,
+        origin: 'laptop',
+        ts: ts,
+      ),
+      plaintext: bytes,
+      pairingSecret: 'pairing-secret',
+    );
+  }
+
   test(
     'decrypts incoming text, stores it, and writes the Android clipboard',
     () async {
@@ -40,59 +72,39 @@ void main() {
         receivedTextRepository: ReceivedTextRepository(storage),
         receivedImageRepository: imageRepository(storage),
       );
-      final frame = await PayloadCrypto().encrypt(
-        metadata: const PayloadMetadata(
-          type: PayloadType.text,
-          mime: 'text/plain',
-          origin: 'laptop',
-          ts: 1800000400000,
-        ),
-        plaintext: 'hello phone'.codeUnits,
-        pairingSecret: 'pairing-secret',
-      );
 
       final result = await receiver.receive(
-        frame: frame,
+        frame: await textFrame('hello phone'),
         pairingSecret: 'pairing-secret',
       );
 
       expect(result.received, isTrue);
       expect(result.message, 'Text copied from laptop.');
       expect(clipboard.text, 'hello phone');
-      expect(
-        await ReceivedTextRepository(storage).loadLatest(),
-        'hello phone',
-      );
-      expect(notifier.textPreviews.single, 'hello phone');
+      expect(await ReceivedTextRepository(storage).loadLatest(), 'hello phone');
+      expect(notifier.textReceipts.single, (preview: 'hello phone', copied: true));
     },
   );
 
   test(
-    'still receives when the background clipboard write is rejected',
+    'still receives when the background clipboard write fails outright',
     () async {
       final notifier = FakePayloadNotifier();
       final storage = MemoryReceivedPayloadStorage();
+      final logs = <({String message, bool isError})>[];
       final receiver = PayloadReceiver(
         crypto: PayloadCrypto(),
-        clipboard: ThrowingAndroidClipboard(),
+        clipboard: ThrowingAndroidClipboard(StateError('write refused')),
         imageClipboard: FakeAndroidImageClipboard(),
         notifier: notifier,
         receivedTextRepository: ReceivedTextRepository(storage),
         receivedImageRepository: imageRepository(storage),
-      );
-      final frame = await PayloadCrypto().encrypt(
-        metadata: const PayloadMetadata(
-          type: PayloadType.text,
-          mime: 'text/plain',
-          origin: 'laptop',
-          ts: 1800000400004,
-        ),
-        plaintext: 'blocked write'.codeUnits,
-        pairingSecret: 'pairing-secret',
+        log: (message, {isError = false}) =>
+            logs.add((message: message, isError: isError)),
       );
 
       final result = await receiver.receive(
-        frame: frame,
+        frame: await textFrame('blocked write', ts: 1800000400004),
         pairingSecret: 'pairing-secret',
       );
 
@@ -102,7 +114,92 @@ void main() {
         await ReceivedTextRepository(storage).loadLatest(),
         'blocked write',
       );
-      expect(notifier.textPreviews.single, 'blocked write');
+      expect(
+        notifier.textReceipts.single,
+        (preview: 'blocked write', copied: false),
+      );
+      expect(notifier.miuiHintCount, 0);
+      expect(logs.single.isError, isTrue);
+    },
+  );
+
+  test(
+    'a SecurityException-blocked write shows the MIUI hint exactly once',
+    () async {
+      final notifier = FakePayloadNotifier();
+      final storage = MemoryReceivedPayloadStorage();
+      var hintShown = false;
+      final receiver = PayloadReceiver(
+        crypto: PayloadCrypto(),
+        clipboard: ThrowingAndroidClipboard(
+          PlatformException(
+            code: ImagesyncClipboard.blockedErrorCode,
+            message: 'MIUI denied it',
+          ),
+        ),
+        imageClipboard: FakeAndroidImageClipboard(),
+        notifier: notifier,
+        receivedTextRepository: ReceivedTextRepository(storage),
+        receivedImageRepository: imageRepository(storage),
+        hasShownMiuiClipboardHint: () async => hintShown,
+        markMiuiClipboardHintShown: () async => hintShown = true,
+      );
+
+      final first = await receiver.receive(
+        frame: await textFrame('first', ts: 1800000400010),
+        pairingSecret: 'pairing-secret',
+      );
+      final second = await receiver.receive(
+        frame: await textFrame('second', ts: 1800000400011),
+        pairingSecret: 'pairing-secret',
+      );
+
+      expect(first.received, isTrue);
+      expect(
+        first.message,
+        'Text received — clipboard blocked by the device. '
+        'Tap the notification to copy.',
+      );
+      expect(second.received, isTrue);
+      expect(notifier.textReceipts, hasLength(2));
+      expect(notifier.textReceipts.every((receipt) => !receipt.copied), isTrue);
+      expect(notifier.miuiHintCount, 1);
+      expect(hintShown, isTrue);
+    },
+  );
+
+  test(
+    'a MissingPluginException is logged loudly as a wiring bug, no MIUI hint',
+    () async {
+      final notifier = FakePayloadNotifier();
+      final storage = MemoryReceivedPayloadStorage();
+      final logs = <({String message, bool isError})>[];
+      final receiver = PayloadReceiver(
+        crypto: PayloadCrypto(),
+        clipboard: ThrowingAndroidClipboard(
+          MissingPluginException('no handler'),
+        ),
+        imageClipboard: FakeAndroidImageClipboard(),
+        notifier: notifier,
+        receivedTextRepository: ReceivedTextRepository(storage),
+        receivedImageRepository: imageRepository(storage),
+        hasShownMiuiClipboardHint: () async => false,
+        markMiuiClipboardHintShown: () async {},
+        log: (message, {isError = false}) =>
+            logs.add((message: message, isError: isError)),
+      );
+
+      final result = await receiver.receive(
+        frame: await textFrame('lost write', ts: 1800000400012),
+        pairingSecret: 'pairing-secret',
+      );
+
+      expect(result.received, isTrue);
+      expect(result.message, 'Text received. Tap the notification to copy.');
+      expect(notifier.miuiHintCount, 0);
+      expect(logs.single.isError, isTrue);
+      expect(logs.single.message, contains('MissingPluginException'));
+      expect(logs.single.message, contains('regression'));
     },
   );
 
@@ -120,25 +217,15 @@ void main() {
         receivedTextRepository: ReceivedTextRepository(storage),
         receivedImageRepository: imageRepository(storage),
       );
-      final frame = await PayloadCrypto().encrypt(
-        metadata: const PayloadMetadata(
-          type: PayloadType.image,
-          mime: 'image/png',
-          origin: 'laptop',
-          ts: 1800000400001,
-        ),
-        plaintext: [1, 2, 3, 4],
-        pairingSecret: 'pairing-secret',
-      );
 
       final result = await receiver.receive(
-        frame: frame,
+        frame: await imageFrame([1, 2, 3, 4], 'image/png'),
         pairingSecret: 'pairing-secret',
       );
 
       expect(result.received, isTrue);
       expect(result.message, 'Image copied from laptop.');
-      expect(notifier.imageMimes.single, 'image/png');
+      expect(notifier.imageReceipts.single, (mime: 'image/png', copied: true));
       final written = imageClipboard.images.single;
       expect(written.mime, 'image/png');
       expect(await File(written.path).readAsBytes(), [1, 2, 3, 4]);
@@ -148,37 +235,37 @@ void main() {
   );
 
   test(
-    'still receives an image when the background clipboard write is rejected',
+    'a blocked image write shows a failure receipt and the one-time hint',
     () async {
       final notifier = FakePayloadNotifier();
       final storage = MemoryReceivedPayloadStorage();
+      var hintShown = false;
       final receiver = PayloadReceiver(
         crypto: PayloadCrypto(),
         clipboard: FakeAndroidClipboard(),
-        imageClipboard: ThrowingAndroidImageClipboard(),
+        imageClipboard: ThrowingAndroidImageClipboard(
+          PlatformException(code: ImagesyncClipboard.blockedErrorCode),
+        ),
         notifier: notifier,
         receivedTextRepository: ReceivedTextRepository(storage),
         receivedImageRepository: imageRepository(storage),
-      );
-      final frame = await PayloadCrypto().encrypt(
-        metadata: const PayloadMetadata(
-          type: PayloadType.image,
-          mime: 'image/jpeg',
-          origin: 'laptop',
-          ts: 1800000400005,
-        ),
-        plaintext: [9, 8, 7],
-        pairingSecret: 'pairing-secret',
+        hasShownMiuiClipboardHint: () async => hintShown,
+        markMiuiClipboardHintShown: () async => hintShown = true,
       );
 
       final result = await receiver.receive(
-        frame: frame,
+        frame: await imageFrame([9, 8, 7], 'image/jpeg', ts: 1800000400005),
         pairingSecret: 'pairing-secret',
       );
 
       expect(result.received, isTrue);
-      expect(result.message, 'Image received. Tap the notification to copy.');
-      expect(notifier.imageMimes.single, 'image/jpeg');
+      expect(
+        result.message,
+        'Image received — clipboard blocked by the device. '
+        'Tap the notification to copy.',
+      );
+      expect(notifier.imageReceipts.single, (mime: 'image/jpeg', copied: false));
+      expect(notifier.miuiHintCount, 1);
       final stored = await imageRepository(storage).loadLatest();
       expect(stored?.mime, 'image/jpeg');
       expect(await File(stored!.path).readAsBytes(), [9, 8, 7]);
@@ -195,16 +282,7 @@ void main() {
       receivedTextRepository: ReceivedTextRepository(storage),
       receivedImageRepository: imageRepository(storage),
     );
-    final frame = await PayloadCrypto().encrypt(
-      metadata: const PayloadMetadata(
-        type: PayloadType.text,
-        mime: 'text/plain',
-        origin: 'laptop',
-        ts: 1800000400002,
-      ),
-      plaintext: 'secret text'.codeUnits,
-      pairingSecret: 'pairing-secret',
-    );
+    final frame = await textFrame('secret text', ts: 1800000400002);
 
     final result = await receiver.receive(
       frame: frame,
@@ -213,6 +291,30 @@ void main() {
 
     expect(result.received, isFalse);
     expect(result.message, startsWith('Receive failed:'));
+  });
+
+  test('the receive-notifications toggle suppresses success receipts only', () {
+    expect(
+      LocalPayloadNotifier.shouldShowReceipt(
+        copied: true,
+        showSuccessReceipts: false,
+      ),
+      isFalse,
+    );
+    expect(
+      LocalPayloadNotifier.shouldShowReceipt(
+        copied: false,
+        showSuccessReceipts: false,
+      ),
+      isTrue,
+    );
+    expect(
+      LocalPayloadNotifier.shouldShowReceipt(
+        copied: true,
+        showSuccessReceipts: true,
+      ),
+      isTrue,
+    );
   });
 
   test('receive controller handles frames from the relay stream', () async {
@@ -237,16 +339,7 @@ void main() {
         resultCompleter.complete();
       },
     );
-    final frame = await PayloadCrypto().encrypt(
-      metadata: const PayloadMetadata(
-        type: PayloadType.text,
-        mime: 'text/plain',
-        origin: 'laptop',
-        ts: 1800000400003,
-      ),
-      plaintext: 'from stream'.codeUnits,
-      pairingSecret: 'pairing-secret',
-    );
+    final frame = await textFrame('from stream', ts: 1800000400003);
 
     controller.start();
     frames.add(frame);
@@ -269,9 +362,13 @@ class FakeAndroidClipboard implements AndroidClipboard {
 }
 
 class ThrowingAndroidClipboard implements AndroidClipboard {
+  ThrowingAndroidClipboard(this.error);
+
+  final Object error;
+
   @override
   Future<void> writeText(String text) async {
-    throw StateError('Background clipboard access denied.');
+    throw error;
   }
 }
 
@@ -285,23 +382,33 @@ class FakeAndroidImageClipboard implements AndroidImageClipboard {
 }
 
 class ThrowingAndroidImageClipboard implements AndroidImageClipboard {
+  ThrowingAndroidImageClipboard(this.error);
+
+  final Object error;
+
   @override
   Future<void> writeImage(ReceivedImage image) async {
-    throw StateError('Background clipboard access denied.');
+    throw error;
   }
 }
 
 class FakePayloadNotifier implements PayloadNotifier {
-  final textPreviews = <String>[];
-  final imageMimes = <String>[];
+  final textReceipts = <({String preview, bool copied})>[];
+  final imageReceipts = <({String mime, bool copied})>[];
+  int miuiHintCount = 0;
 
   @override
-  Future<void> showTextReady(String preview) async {
-    textPreviews.add(preview);
+  Future<void> showTextReceipt(String preview, {required bool copied}) async {
+    textReceipts.add((preview: preview, copied: copied));
   }
 
   @override
-  Future<void> showImageReady(String mime) async {
-    imageMimes.add(mime);
+  Future<void> showImageReceipt(String mime, {required bool copied}) async {
+    imageReceipts.add((mime: mime, copied: copied));
+  }
+
+  @override
+  Future<void> showMiuiClipboardHint() async {
+    miuiHintCount += 1;
   }
 }

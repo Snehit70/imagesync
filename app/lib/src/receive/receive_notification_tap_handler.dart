@@ -1,10 +1,29 @@
 import 'dart:async';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:imagesync_clipboard/imagesync_clipboard.dart';
 
 import 'payload_receiver.dart';
 import 'received_image_repository.dart';
 import 'received_text_repository.dart';
+
+abstract interface class ClipboardPermissionSettingsOpener {
+  Future<void> open();
+}
+
+/// Opens the MIUI permission editor (or the app-details fallback) through
+/// the imagesync_clipboard plugin.
+class ChannelClipboardPermissionSettingsOpener
+    implements ClipboardPermissionSettingsOpener {
+  const ChannelClipboardPermissionSettingsOpener([
+    this._clipboard = const ImagesyncClipboard(),
+  ]);
+
+  final ImagesyncClipboard _clipboard;
+
+  @override
+  Future<void> open() => _clipboard.openClipboardPermissionSettings();
+}
 
 /// UI-isolate handler for taps on incoming-payload notifications.
 ///
@@ -18,6 +37,8 @@ class ReceiveNotificationTapHandler {
     required this.imageRepository,
     required this.clipboard,
     required this.imageClipboard,
+    this.permissionSettingsOpener =
+        const ChannelClipboardPermissionSettingsOpener(),
     FlutterLocalNotificationsPlugin? plugin,
   }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
@@ -25,6 +46,7 @@ class ReceiveNotificationTapHandler {
   final ReceivedImageRepository imageRepository;
   final AndroidClipboard clipboard;
   final AndroidImageClipboard imageClipboard;
+  final ClipboardPermissionSettingsOpener permissionSettingsOpener;
   final FlutterLocalNotificationsPlugin _plugin;
 
   /// Invoked with a status message after a tap is handled.
@@ -56,6 +78,16 @@ class ReceiveNotificationTapHandler {
         await _copyLatestText();
       case copyLatestImageNotificationPayload:
         await _copyLatestImage();
+      case openClipboardPermissionNotificationPayload:
+        await _openClipboardPermissionSettings();
+    }
+  }
+
+  Future<void> _openClipboardPermissionSettings() async {
+    try {
+      await permissionSettingsOpener.open();
+    } on Object catch (error) {
+      onCopied?.call('Could not open clipboard settings: $error');
     }
   }
 

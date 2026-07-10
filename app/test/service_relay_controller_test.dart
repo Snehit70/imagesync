@@ -399,8 +399,11 @@ class _SilentImageClipboard implements AndroidImageClipboard {
 
 class _SilentNotifier implements PayloadNotifier {
   @override
-  Future<void> showTextReady(String preview) async {}
+  Future<void> showTextReceipt(String preview, {required bool copied}) async {}
 
   @override
-  Future<void> showImageReady(String mime) async {}
+  Future<void> showImageReceipt(String mime, {required bool copied}) async {}
+
+  @override
+  Future<void> showMiuiClipboardHint() async {}
 }

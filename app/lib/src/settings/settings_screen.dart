@@ -37,7 +37,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: const Padding(
                 padding: EdgeInsets.only(top: 4),
                 child: Text(
-                  'Show a notification when the laptop sends text or images to the phone.',
+                  'Show a receipt when something arrives from the laptop. '
+                  'Delivery-failure notices always show.',
                 ),
               ),
               onChanged: (value) => _updateSettings(

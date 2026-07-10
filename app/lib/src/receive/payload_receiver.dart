@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:imagesync_clipboard/imagesync_clipboard.dart';
 
 import '../shared/payload_crypto.dart';
 import '../shared/wire.dart';
@@ -15,17 +17,42 @@ const copyLatestTextNotificationPayload = 'imagesync.copy-latest-text';
 /// Notification payload marking "tap to copy the latest received image".
 const copyLatestImageNotificationPayload = 'imagesync.copy-latest-image';
 
+/// Notification payload marking "open the clipboard permission settings"
+/// (the one-time MIUI hint).
+const openClipboardPermissionNotificationPayload =
+    'imagesync.open-clipboard-permission';
+
+/// How a direct clipboard write resolved (zero-tap-receive D3).
+enum ClipboardWriteOutcome {
+  /// The channel returned success; on AOSP this is trustworthy.
+  confirmed,
+
+  /// `SecurityException` from `setPrimaryClip` — MIUI's privacy layer.
+  blocked,
+
+  /// `MissingPluginException` — the plugin didn't register in this isolate.
+  /// A regression, not device policy.
+  wiringBug,
+
+  /// Any other write error (missing file, provider rejection, ...).
+  failed,
+}
+
 abstract interface class AndroidClipboard {
   Future<void> writeText(String text);
 }
 
+/// Writes text through the `imagesync/clipboard` channel. The plugin hosts
+/// the channel from application context, so this works in the UI isolate and
+/// the foreground-service isolate alike (unlike `Clipboard.setData`, whose
+/// Android handler only attaches to activity-backed engines).
 class FlutterAndroidClipboard implements AndroidClipboard {
-  const FlutterAndroidClipboard();
+  const FlutterAndroidClipboard([this._clipboard = const ImagesyncClipboard()]);
+
+  final ImagesyncClipboard _clipboard;
 
   @override
-  Future<void> writeText(String text) {
-    return Clipboard.setData(ClipboardData(text: text));
-  }
+  Future<void> writeText(String text) => _clipboard.writeText(text);
 }
 
 abstract interface class AndroidImageClipboard {
@@ -33,84 +60,142 @@ abstract interface class AndroidImageClipboard {
 }
 
 /// Writes an image to the Android clipboard through the `imagesync/clipboard`
-/// platform channel: the Kotlin side wraps the file in a FileProvider content
-/// URI and sets it as ClipData. The channel is hosted by MainActivity, so the
-/// write only succeeds from the UI isolate with the app in the foreground —
-/// the notification-tap path.
+/// channel: the Kotlin side wraps the file in a FileProvider content URI and
+/// sets it as ClipData. Hosted by the imagesync_clipboard plugin, so it works
+/// from both engines.
 class ChannelAndroidImageClipboard implements AndroidImageClipboard {
-  const ChannelAndroidImageClipboard();
+  const ChannelAndroidImageClipboard([
+    this._clipboard = const ImagesyncClipboard(),
+  ]);
 
-  static const _channel = MethodChannel('imagesync/clipboard');
+  final ImagesyncClipboard _clipboard;
 
   @override
   Future<void> writeImage(ReceivedImage image) {
-    return _channel.invokeMethod<void>('writeImage', {
-      'path': image.path,
-      'mime': image.mime,
-    });
+    return _clipboard.writeImage(path: image.path, mime: image.mime);
   }
 }
 
 abstract interface class PayloadNotifier {
-  Future<void> showTextReady(String preview);
+  Future<void> showTextReceipt(String preview, {required bool copied});
 
-  Future<void> showImageReady(String mime);
+  Future<void> showImageReceipt(String mime, {required bool copied});
+
+  /// Normal-importance, one-time hint that MIUI blocked the write; its tap
+  /// opens the clipboard permission settings.
+  Future<void> showMiuiClipboardHint();
 }
 
 class LocalPayloadNotifier implements PayloadNotifier {
   LocalPayloadNotifier({
     FlutterLocalNotificationsPlugin? plugin,
-    this.enabled = true,
+    this.showSuccessReceipts = true,
     this.requestPermissionOnInit = true,
   }) : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   final FlutterLocalNotificationsPlugin _plugin;
-  final bool enabled;
+
+  /// The `showReceiveNotifications` setting. Suppresses success receipts
+  /// only — failure receipts always show, because when the direct write
+  /// fails the notification tap is the only delivery path.
+  final bool showSuccessReceipts;
 
   /// The foreground service isolate has no activity to anchor a permission
   /// prompt; the UI requests notification permission before starting it.
   final bool requestPermissionOnInit;
   bool _initialized = false;
 
+  /// Fixed ids: receipts replace in place so a burst of payloads doesn't
+  /// stack (only the latest payload is copyable from the repository anyway);
+  /// the MIUI hint gets its own slot.
+  static const receiptNotificationId = 4201;
+  static const miuiHintNotificationId = 4202;
+
+  /// Quiet receipts (zero-tap-receive D4): no sound, no heads-up. Channel
+  /// importance is fixed at creation, so the quiet behavior needs this new
+  /// channel; the old alerting `imagesync_payloads` channel is deleted on
+  /// upgrade in [_ensureInitialized].
+  static const _receiptDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'imagesync_receipts',
+      'ImageSync receipts',
+      channelDescription: 'Quiet receipts for payloads received from the laptop',
+      importance: Importance.low,
+      priority: Priority.low,
+    ),
+  );
+
+  static const _hintDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      'imagesync_hints',
+      'ImageSync permission hints',
+      channelDescription:
+          'Action-needed hints, e.g. clipboard access blocked by the device',
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
+    ),
+  );
+
   @override
-  Future<void> showTextReady(String preview) async {
-    await _show(
-      title: 'ImageSync text ready',
-      body: preview.isEmpty ? 'Tap to copy the received text.' : preview,
+  Future<void> showTextReceipt(String preview, {required bool copied}) {
+    return _showReceipt(
+      copied: copied,
+      description: preview.isEmpty ? 'Text' : preview,
       payload: copyLatestTextNotificationPayload,
     );
   }
 
   @override
-  Future<void> showImageReady(String mime) async {
-    await _show(
-      title: 'ImageSync image ready',
-      body: 'Tap to copy the received image ($mime).',
+  Future<void> showImageReceipt(String mime, {required bool copied}) {
+    return _showReceipt(
+      copied: copied,
+      description: 'Image ($mime)',
       payload: copyLatestImageNotificationPayload,
     );
   }
 
-  Future<void> _show({
-    required String title,
-    required String body,
-    String? payload,
-  }) async {
-    if (!enabled) return;
+  @override
+  Future<void> showMiuiClipboardHint() async {
     await _ensureInitialized();
     await _plugin.show(
-      id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      title: title,
-      body: body,
+      id: miuiHintNotificationId,
+      title: 'Allow clipboard access for ImageSync',
+      body:
+          'The device blocked a background clipboard write. Tap to open '
+          'settings and enable the Clipboard permission.',
+      payload: openClipboardPermissionNotificationPayload,
+      notificationDetails: _hintDetails,
+    );
+  }
+
+  /// D4 carve-out: the receive-notifications toggle suppresses success
+  /// receipts only; a failure receipt is the payload's delivery path.
+  @visibleForTesting
+  static bool shouldShowReceipt({
+    required bool copied,
+    required bool showSuccessReceipts,
+  }) {
+    return !copied || showSuccessReceipts;
+  }
+
+  Future<void> _showReceipt({
+    required bool copied,
+    required String description,
+    required String payload,
+  }) async {
+    if (!shouldShowReceipt(
+      copied: copied,
+      showSuccessReceipts: showSuccessReceipts,
+    )) {
+      return;
+    }
+    await _ensureInitialized();
+    await _plugin.show(
+      id: receiptNotificationId,
+      title: copied ? 'Copied from laptop' : 'Received from laptop',
+      body: copied ? description : 'Tap to copy — $description',
       payload: payload,
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'imagesync_payloads',
-          'ImageSync payloads',
-          channelDescription: 'Notifications for incoming ImageSync payloads',
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-      ),
+      notificationDetails: _receiptDetails,
     );
   }
 
@@ -121,12 +206,15 @@ class LocalPayloadNotifier implements PayloadNotifier {
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       ),
     );
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    // Pre-receipt installs created this high-importance channel; Android
+    // won't lower a channel's importance, so it has to go.
+    await android?.deleteNotificationChannel(channelId: 'imagesync_payloads');
     if (requestPermissionOnInit) {
-      await _plugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >()
-          ?.requestNotificationsPermission();
+      await android?.requestNotificationsPermission();
     }
     _initialized = true;
   }
@@ -143,6 +231,8 @@ class PayloadReceiveResult {
   final String message;
 }
 
+typedef PayloadReceiverLog = void Function(String message, {bool isError});
+
 class PayloadReceiver {
   const PayloadReceiver({
     required this.crypto,
@@ -151,6 +241,9 @@ class PayloadReceiver {
     required this.notifier,
     required this.receivedTextRepository,
     required this.receivedImageRepository,
+    this.hasShownMiuiClipboardHint,
+    this.markMiuiClipboardHintShown,
+    this.log,
   });
 
   final PayloadCrypto crypto;
@@ -159,6 +252,14 @@ class PayloadReceiver {
   final PayloadNotifier notifier;
   final ReceivedTextRepository receivedTextRepository;
   final ReceivedImageRepository receivedImageRepository;
+
+  /// Persisted "hint already shown" flag; when these are left null the
+  /// one-time MIUI hint is disabled.
+  final Future<bool> Function()? hasShownMiuiClipboardHint;
+  final Future<void> Function()? markMiuiClipboardHintShown;
+
+  /// Debug-log sink; the wiring-bug outcome logs loudly through this.
+  final PayloadReceiverLog? log;
 
   Future<PayloadReceiveResult> receive({
     required PayloadFrame frame,
@@ -169,56 +270,85 @@ class PayloadReceiver {
         frame: frame,
         pairingSecret: pairingSecret,
       );
+      // Repository first (source of truth): whatever happens to the write,
+      // the notification tap can always re-copy from the repository.
       switch (frame.type) {
         case PayloadType.text:
           final text = utf8.decode(plaintext);
           await receivedTextRepository.saveLatest(text);
-          final copied = await _tryWriteClipboard(text);
-          await notifier.showTextReady(_preview(text));
-          return PayloadReceiveResult.received(
-            copied
-                ? 'Text copied from laptop.'
-                : 'Text received. Tap the notification to copy.',
+          final outcome = await _tryWrite(() => clipboard.writeText(text));
+          await notifier.showTextReceipt(
+            _preview(text),
+            copied: outcome == ClipboardWriteOutcome.confirmed,
           );
+          await _maybeShowMiuiHint(outcome);
+          return PayloadReceiveResult.received(_message('Text', outcome));
         case PayloadType.image:
           final image = await receivedImageRepository.saveLatest(
             plaintext,
             frame.mime,
           );
-          final copied = await _tryWriteImageClipboard(image);
-          await notifier.showImageReady(frame.mime);
-          return PayloadReceiveResult.received(
-            copied
-                ? 'Image copied from laptop.'
-                : 'Image received. Tap the notification to copy.',
+          final outcome = await _tryWrite(() => imageClipboard.writeImage(image));
+          await notifier.showImageReceipt(
+            frame.mime,
+            copied: outcome == ClipboardWriteOutcome.confirmed,
           );
+          await _maybeShowMiuiHint(outcome);
+          return PayloadReceiveResult.received(_message('Image', outcome));
       }
     } on Object catch (error) {
       return PayloadReceiveResult.failed('Receive failed: $error');
     }
   }
 
-  /// Android 10+ (and MIUI in particular) can reject clipboard writes from
-  /// a background service; the notification tap is the guaranteed path.
-  Future<bool> _tryWriteClipboard(String text) async {
+  /// Resolves the direct write to the D3 taxonomy. MIUI's silent no-op is
+  /// not detectable from the background (read-back needs focus), so "no
+  /// exception" counts as confirmed.
+  Future<ClipboardWriteOutcome> _tryWrite(Future<void> Function() write) async {
     try {
-      await clipboard.writeText(text);
-      return true;
-    } on Object {
-      return false;
+      await write();
+      return ClipboardWriteOutcome.confirmed;
+    } on MissingPluginException {
+      log?.call(
+        'Clipboard channel missing in this isolate (MissingPluginException): '
+        'the imagesync_clipboard plugin failed to register. This is a wiring '
+        'regression, not device policy.',
+        isError: true,
+      );
+      return ClipboardWriteOutcome.wiringBug;
+    } on PlatformException catch (error) {
+      if (error.code == ImagesyncClipboard.blockedErrorCode) {
+        log?.call('Clipboard write blocked by the device: ${error.message}');
+        return ClipboardWriteOutcome.blocked;
+      }
+      log?.call('Clipboard write failed: $error', isError: true);
+      return ClipboardWriteOutcome.failed;
+    } on Object catch (error) {
+      log?.call('Clipboard write failed: $error', isError: true);
+      return ClipboardWriteOutcome.failed;
     }
   }
 
-  /// The image channel lives on the activity engine, so this always fails in
-  /// the service isolate today; kept as the same best-effort fast path as
-  /// text so a future always-available host makes it light up.
-  Future<bool> _tryWriteImageClipboard(ReceivedImage image) async {
-    try {
-      await imageClipboard.writeImage(image);
-      return true;
-    } on Object {
-      return false;
-    }
+  Future<void> _maybeShowMiuiHint(ClipboardWriteOutcome outcome) async {
+    if (outcome != ClipboardWriteOutcome.blocked) return;
+    final hasShown = hasShownMiuiClipboardHint;
+    final markShown = markMiuiClipboardHintShown;
+    if (hasShown == null || markShown == null) return;
+    if (await hasShown()) return;
+    await markShown();
+    await notifier.showMiuiClipboardHint();
+  }
+
+  String _message(String what, ClipboardWriteOutcome outcome) {
+    return switch (outcome) {
+      ClipboardWriteOutcome.confirmed => '$what copied from laptop.',
+      ClipboardWriteOutcome.blocked =>
+        '$what received — clipboard blocked by the device. '
+            'Tap the notification to copy.',
+      ClipboardWriteOutcome.wiringBug ||
+      ClipboardWriteOutcome.failed =>
+        '$what received. Tap the notification to copy.',
+    };
   }
 
   String _preview(String text) {

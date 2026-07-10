@@ -43,6 +43,8 @@ class AppSettingsRepository {
       'imagesync.settings.showReceiveNotifications';
   static const _showPersistentSendNotificationKey =
       'imagesync.settings.showPersistentSendNotification';
+  static const _miuiClipboardHintShownKey =
+      'imagesync.settings.miuiClipboardHintShown';
 
   final AppSettingsStorage _storage;
 
@@ -68,6 +70,20 @@ class AppSettingsRepository {
         settings.showPersistentSendNotification.toString(),
       ),
     ]);
+  }
+
+  /// Whether the one-time "MIUI blocked the clipboard write" hint has been
+  /// shown. Kept out of [AppSettings]: it is service-side bookkeeping, not a
+  /// user choice, and writing it alone can't clobber a concurrent [save].
+  Future<bool> miuiClipboardHintShown() async {
+    return _readBool(
+      await _storage.read(_miuiClipboardHintShownKey),
+      fallback: false,
+    );
+  }
+
+  Future<void> markMiuiClipboardHintShown() {
+    return _storage.write(_miuiClipboardHintShownKey, 'true');
   }
 }
 

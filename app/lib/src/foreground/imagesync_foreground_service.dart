@@ -54,9 +54,18 @@ class ImageSyncForegroundTaskHandler extends TaskHandler {
           const SecureReceivedPayloadStorage(),
         ),
         notifier: LocalPayloadNotifier(
-          enabled: settings.showReceiveNotifications,
+          showSuccessReceipts: settings.showReceiveNotifications,
           requestPermissionOnInit: false,
         ),
+        hasShownMiuiClipboardHint: settingsRepository.miuiClipboardHintShown,
+        markMiuiClipboardHintShown:
+            settingsRepository.markMiuiClipboardHintShown,
+        log: (message, {isError = false}) => FlutterForegroundTask
+            .sendDataToMain({
+              'kind': 'log',
+              'message': message,
+              'error': isError,
+            }),
       ),
       emit: FlutterForegroundTask.sendDataToMain,
       updateNotification: (title, text) async {

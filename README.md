@@ -58,15 +58,6 @@ In another terminal, run the Bun tests against the in-process relay implementati
 bun test tests/relay-protocol.test.ts
 ```
 
-## Full V1 E2E Target
+## Full V1 E2E
 
-The final PRD target remains:
-
-- Laptop screenshot or copied text automatically publishes to the pool.
-- Phone receives a notification, and tapping it writes the payload to Android clipboard.
-- Phone share-sheet push publishes image/text into ImageSync.
-- Laptop clipboard receives the phone payload automatically.
-- The app includes a settings screen for notification preferences.
-- When enabled in settings, the app keeps a persistent foreground notification with a `Send clipboard` action for phone text.
-
-That is not complete until the Flutter app, cross-language crypto fixtures, debug APK CI artifact, and manual two-direction E2E script are implemented.
+The two-direction acceptance script — laptop text/image to phone via notification tap, phone share-sheet to laptop `wl-paste`, plus reconnect and observability checks — lives in `docs/E2E.md`. V1 is done when that script passes green in both directions on the real phone and laptop.

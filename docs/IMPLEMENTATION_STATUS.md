@@ -38,11 +38,14 @@ This file is a live gap map against `docs/PRD.md`. It is not a replacement for t
 - Flat Raspberry Pink design system applied across all screens: `app/lib/src/design/` holds the palette (raspberry/petal/mist on white, plum ink), Plus Jakarta Sans theme (`google_fonts`, weight-driven 26/16/14/12 scale), spring-motion constants, and the expressive widgets (morphing blob hero, pulsing status dot, ripple-ring success orb, squash-on-press buttons, staggered entrances). Pairing/home, settings, debug log, send-clipboard, and QR screens all use it; looping animations honor `Motion.loopsEnabled` so widget tests settle.
 - The wayfinder map (issue #9) tracks the route to v1 completion; issues #2-#8 are superseded.
 
+## Implemented, Awaiting On-Phone Verification
+
+- The two-direction manual E2E script is written (`docs/E2E.md`) and the environment is staged: relay installed and running as the systemd user service, current debug APK installed on the phone over USB (the earlier `INSTALL_FAILED_USER_RESTRICTED` block is cleared).
+
 ## Not Done
 
-- Full two-direction manual E2E script.
-- Green full D1-D9 completion audit.
-- Physical-phone install/E2E is blocked by the connected MIUI device policy `INSTALL_FAILED_USER_RESTRICTED` until "Install via USB" is enabled on the phone.
+- The E2E script has not yet been run green on the real phone + laptop.
+- Green full D1-D9 completion audit (D2 and D5 hinge on the E2E run; the desk-auditable items — D1, D3, D4, D6, D7, D8, D9 — check out).
 
 ## Latest Verified Commands
 

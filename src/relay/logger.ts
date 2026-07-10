@@ -14,6 +14,14 @@ export interface Logger {
   error(message: string, fields?: Record<string, unknown>): void;
 }
 
+/** Silences instrumentation when no logger is wired in (library use, tests). */
+export const noopLogger: Logger = {
+  debug: () => undefined,
+  info: () => undefined,
+  warn: () => undefined,
+  error: () => undefined,
+};
+
 export function createLogger(level: LogLevel): Logger {
   return {
     debug: (message, fields) => writeLog(level, "debug", message, fields),

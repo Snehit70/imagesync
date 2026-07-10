@@ -36,6 +36,7 @@ const relay = await createRelay({
   port,
   pairingSecret: config.pairingSecret,
   maxPayloadBytes,
+  logger,
 });
 
 const stopClipboard = options.clipboard
@@ -45,6 +46,7 @@ const stopClipboard = options.clipboard
       pairingSecret: config.pairingSecret,
       origin: config.deviceId,
       now: Date.now,
+      logger,
     })
   : () => undefined;
 const stopMdns = startMdnsAdvertisement({

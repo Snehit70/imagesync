@@ -7,6 +7,7 @@ import 'package:imagesync/main.dart';
 import 'package:imagesync/src/foreground/foreground_service_client.dart';
 import 'package:imagesync/src/pairing/pairing_code.dart';
 import 'package:imagesync/src/pairing/pairing_repository.dart';
+import 'package:imagesync/src/pairing/relay_discovery.dart';
 import 'package:imagesync/src/settings/app_settings.dart';
 import 'package:imagesync/src/settings/app_settings_repository.dart';
 import 'package:imagesync/src/shared/relay_connection.dart';
@@ -82,6 +83,74 @@ void main() {
     expect(find.textContaining('192.168.1.20:17321'), findsOneWidget);
   });
 
+  testWidgets('lists nearby relays and selecting one fills host and port', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ImageSyncApp(
+        appSettingsRepository: AppSettingsRepository(
+          MemoryAppSettingsStorage(),
+        ),
+        foregroundServiceClient: FakeForegroundServiceClient(),
+        pairingRepository: PairingRepository(MemoryPairingStorage()),
+        relayConnectionFactory: fakeConnection,
+        relayDiscovery: FakeRelayDiscovery(const [
+          DiscoveredRelay(name: 'ImageSync Relay', host: '192.168.1.5', port: 17321),
+        ]),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nearby relays'), findsOneWidget);
+    expect(find.text('ImageSync Relay'), findsOneWidget);
+    expect(find.text('192.168.1.5:17321'), findsOneWidget);
+
+    await tester.tap(find.text('ImageSync Relay'));
+    await tester.pumpAndSettle();
+
+    final hostField = tester.widget<TextField>(
+      find.widgetWithText(TextField, 'Relay IP'),
+    );
+    final portField = tester.widget<TextField>(
+      find.widgetWithText(TextField, 'Port'),
+    );
+    expect(hostField.controller!.text, '192.168.1.5');
+    expect(portField.controller!.text, '17321');
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Pairing secret'),
+      'secret',
+    );
+    // The finder matches while the button is still in the ListView cache
+    // extent, so scrollUntilVisible would stop before it is tappable.
+    await tester.ensureVisible(find.text('Pair manually'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pair manually'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Searching'), findsOneWidget);
+    expect(find.textContaining('192.168.1.5:17321'), findsOneWidget);
+  });
+
+  testWidgets('shows guidance when no relays are discovered', (tester) async {
+    await tester.pumpWidget(
+      ImageSyncApp(
+        appSettingsRepository: AppSettingsRepository(
+          MemoryAppSettingsStorage(),
+        ),
+        foregroundServiceClient: FakeForegroundServiceClient(),
+        pairingRepository: PairingRepository(MemoryPairingStorage()),
+        relayConnectionFactory: fakeConnection,
+        relayDiscovery: FakeRelayDiscovery(const []),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Nearby relays'), findsOneWidget);
+    expect(find.textContaining('No relays found'), findsOneWidget);
+    expect(find.text('Pair manually'), findsOneWidget);
+  });
+
   testWidgets('opens settings and persists notification toggles', (
     tester,
   ) async {
@@ -148,6 +217,17 @@ class _QuietRelayTransport implements RelayTransport {
 
   @override
   Future<void> close() => _messages.close();
+}
+
+class FakeRelayDiscovery implements RelayDiscovery {
+  FakeRelayDiscovery(this.relays);
+
+  final List<DiscoveredRelay> relays;
+
+  @override
+  Future<List<DiscoveredRelay>> discover({
+    Duration timeout = const Duration(seconds: 3),
+  }) async => relays;
 }
 
 class FakeForegroundServiceClient implements ForegroundServiceClient {

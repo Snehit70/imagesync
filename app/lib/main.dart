@@ -10,6 +10,7 @@ import 'src/foreground/imagesync_foreground_service.dart';
 import 'src/foreground/send_clipboard_screen.dart';
 import 'src/pairing/pairing_code.dart';
 import 'src/pairing/pairing_repository.dart';
+import 'src/pairing/relay_discovery.dart';
 import 'src/receive/payload_receiver.dart';
 import 'src/receive/receive_notification_tap_handler.dart';
 import 'src/receive/received_image_repository.dart';
@@ -34,6 +35,7 @@ void main() {
       ),
       foregroundServiceClient: ImageSyncForegroundServiceClient(),
       pairingRepository: PairingRepository(const SecurePairingStorage()),
+      relayDiscovery: RelayDiscovery(lock: const ChannelMulticastLock()),
       shareSource: const ReceiveSharingIntentSource(),
       receiveNotificationTapHandler: ReceiveNotificationTapHandler(
         repository: const ReceivedTextRepository(
@@ -56,6 +58,7 @@ class ImageSyncApp extends StatelessWidget {
     required this.foregroundServiceClient,
     required this.pairingRepository,
     this.relayConnectionFactory,
+    this.relayDiscovery,
     this.shareSource,
     this.receiveNotificationTapHandler,
   });
@@ -64,6 +67,7 @@ class ImageSyncApp extends StatelessWidget {
   final ForegroundServiceClient foregroundServiceClient;
   final PairingRepository pairingRepository;
   final RelayConnectionFactory? relayConnectionFactory;
+  final RelayDiscovery? relayDiscovery;
   final ShareSource? shareSource;
   final ReceiveNotificationTapHandler? receiveNotificationTapHandler;
 
@@ -115,6 +119,7 @@ class ImageSyncApp extends StatelessWidget {
             foregroundServiceClient: foregroundServiceClient,
             pairingRepository: pairingRepository,
             relayConnectionFactory: connectionFactory,
+            relayDiscovery: relayDiscovery,
             shareSource: shareSource,
             receiveNotificationTapHandler: receiveNotificationTapHandler,
           ),
@@ -140,6 +145,7 @@ class PairingScreen extends StatefulWidget {
     required this.foregroundServiceClient,
     required this.pairingRepository,
     required this.relayConnectionFactory,
+    this.relayDiscovery,
     this.shareSource,
     this.receiveNotificationTapHandler,
   });
@@ -148,6 +154,7 @@ class PairingScreen extends StatefulWidget {
   final ForegroundServiceClient foregroundServiceClient;
   final PairingRepository pairingRepository;
   final RelayConnectionFactory relayConnectionFactory;
+  final RelayDiscovery? relayDiscovery;
   final ShareSource? shareSource;
   final ReceiveNotificationTapHandler? receiveNotificationTapHandler;
 
@@ -161,6 +168,9 @@ class _PairingScreenState extends State<PairingScreen> {
   final _secretController = TextEditingController();
 
   PairingCode? _pairing;
+  List<DiscoveredRelay> _nearbyRelays = const [];
+  DiscoveredRelay? _selectedRelay;
+  bool _discovering = false;
   ShareIntakeController? _shareIntakeController;
   AppSettings _settings = const AppSettings();
   late final ForegroundServiceCoordinator _foregroundServiceCoordinator =
@@ -229,6 +239,30 @@ class _PairingScreenState extends State<PairingScreen> {
     });
     await _syncForegroundService();
     await _startShareIntake();
+    if (pairing == null) await _discoverRelays();
+  }
+
+  Future<void> _discoverRelays() async {
+    final discovery = widget.relayDiscovery;
+    if (discovery == null || _discovering) return;
+    setState(() => _discovering = true);
+    List<DiscoveredRelay>? relays;
+    try {
+      relays = await discovery.discover();
+    } on Exception {
+      // Discovery is best-effort; manual pairing and QR remain available.
+    }
+    if (!mounted) return;
+    setState(() {
+      _discovering = false;
+      if (relays != null) _nearbyRelays = relays;
+    });
+  }
+
+  void _selectNearbyRelay(DiscoveredRelay relay) {
+    _hostController.text = relay.host;
+    _portController.text = relay.port.toString();
+    setState(() => _selectedRelay = relay);
   }
 
   Future<void> _saveManualPairing() async {
@@ -281,8 +315,10 @@ class _PairingScreenState extends State<PairingScreen> {
       _pairing = null;
       _error = null;
       _receiveStatus = null;
+      _selectedRelay = null;
     });
     await _syncForegroundService();
+    await _discoverRelays();
   }
 
   Future<void> _startShareIntake() async {
@@ -390,7 +426,17 @@ class _PairingScreenState extends State<PairingScreen> {
                 icon: const Icon(Icons.link_off),
                 label: const Text('Reset pairing'),
               )
-            else
+            else ...[
+              if (widget.relayDiscovery != null) ...[
+                _NearbyRelaysCard(
+                  relays: _nearbyRelays,
+                  selected: _selectedRelay,
+                  discovering: _discovering,
+                  onRefresh: _discoverRelays,
+                  onSelect: _selectNearbyRelay,
+                ),
+                const SizedBox(height: 24),
+              ],
               _ManualPairingForm(
                 hostController: _hostController,
                 portController: _portController,
@@ -399,6 +445,7 @@ class _PairingScreenState extends State<PairingScreen> {
                 onScanQr: _openQrScanner,
                 onPair: _saveManualPairing,
               ),
+            ],
           ],
         ),
       ),
@@ -473,6 +520,87 @@ class _ShareStatusCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _NearbyRelaysCard extends StatelessWidget {
+  const _NearbyRelaysCard({
+    required this.relays,
+    required this.selected,
+    required this.discovering,
+    required this.onRefresh,
+    required this.onSelect,
+  });
+
+  final List<DiscoveredRelay> relays;
+  final DiscoveredRelay? selected;
+  final bool discovering;
+  final VoidCallback onRefresh;
+  final ValueChanged<DiscoveredRelay> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Nearby relays',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            if (discovering)
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else
+              IconButton(
+                tooltip: 'Search again',
+                icon: const Icon(Icons.refresh),
+                onPressed: onRefresh,
+              ),
+          ],
+        ),
+        if (relays.isEmpty)
+          Text(
+            discovering
+                ? 'Searching for relays on this network…'
+                : 'No relays found. Make sure the laptop relay is running, '
+                      'or pair manually below.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          )
+        else
+          for (final relay in relays)
+            Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: Icon(Icons.dns, color: colors.primary),
+                title: Text(relay.name),
+                subtitle: Text('${relay.host}:${relay.port}'),
+                trailing: relay == selected
+                    ? Icon(Icons.check_circle, color: colors.primary)
+                    : null,
+                onTap: () => onSelect(relay),
+              ),
+            ),
+        if (selected != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Enter the pairing secret below and tap Pair manually.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+      ],
     );
   }
 }

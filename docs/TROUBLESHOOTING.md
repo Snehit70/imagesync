@@ -84,6 +84,19 @@ button flow breaks again on a new Android/MIUI version, suspect this first;
 the quick-settings-tile approach (allowed to launch activities, what KDE
 Connect uses) is the documented fallback.
 
+## Laptop: relay changes don't show up after `systemctl --user restart`
+
+**Symptom:** Rebuilt the relay (`bun run build:relay`), restarted the service,
+but new behavior/log events don't appear.
+
+**Cause:** The systemd unit runs `%h/.local/bin/imagesync-relay`, not the repo's
+`dist/imagesync-relay`. A rebuild only updates `dist/`; restarting relaunches
+the stale installed copy.
+
+**Fix (verified 2026-07-10):** `install -m 755 dist/imagesync-relay
+~/.local/bin/imagesync-relay` (or the full `bun run install:relay`), *then*
+restart the service.
+
 ## Laptop: did the payload even arrive? The relay logs nothing
 
 Until the observability work package (WP1, `docs/specs/relay-observability.md`)

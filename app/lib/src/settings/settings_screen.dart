@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clipboard_autosend/clipboard_autosend.dart';
 import 'package:flutter/material.dart';
 
 import '../design/palette.dart';
@@ -7,6 +8,7 @@ import '../design/widgets.dart';
 import '../onboarding/setup_actions.dart';
 import '../onboarding/setup_checklist_screen.dart';
 import 'app_settings.dart';
+import 'clipboard_autosend_screen.dart';
 
 typedef AppSettingsChanged = Future<void> Function(AppSettings settings);
 
@@ -16,6 +18,7 @@ class SettingsScreen extends StatefulWidget {
     required this.settings,
     required this.onChanged,
     this.setupLoader,
+    this.clipboardAutoSendWatcher,
   });
 
   final AppSettings settings;
@@ -24,6 +27,10 @@ class SettingsScreen extends StatefulWidget {
   /// Feeds the "Setup status" row and its summary chip (onboarding spec D8);
   /// the row is hidden when null (widget tests without platform channels).
   final SetupStatusLoader? setupLoader;
+
+  /// Backs the Advanced → Clipboard auto-send screen (read-logs-auto-text D6);
+  /// the advanced row is hidden when null (widget tests without channels).
+  final ClipboardAutoSendWatcher? clipboardAutoSendWatcher;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -53,6 +60,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
       MaterialPageRoute(builder: (_) => SetupChecklistScreen(loader: loader)),
     );
     await _loadIssueCount();
+  }
+
+  Future<void> _openClipboardAutoSend() async {
+    final watcher = widget.clipboardAutoSendWatcher;
+    if (watcher == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ClipboardAutoSendScreen(
+          settings: _settings,
+          onChanged: _updateSettings,
+          watcher: watcher,
+        ),
+      ),
+    );
   }
 
   @override
@@ -131,6 +152,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ).entrance(3),
+          if (widget.clipboardAutoSendWatcher != null) ...[
+            const SizedBox(height: 14),
+            Card(
+              child: ListTile(
+                contentPadding: const EdgeInsets.fromLTRB(20, 4, 16, 4),
+                title: const Text('Advanced'),
+                subtitle: const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Clipboard auto-send for text — one-time computer setup, '
+                    'not for every phone.',
+                  ),
+                ),
+                trailing: const Icon(Icons.chevron_right, color: Palette.muted),
+                onTap: () => unawaited(_openClipboardAutoSend()),
+              ),
+            ).entrance(4),
+          ],
         ],
       ),
     );

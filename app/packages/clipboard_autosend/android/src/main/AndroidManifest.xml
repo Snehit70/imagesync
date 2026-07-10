@@ -1,0 +1,17 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  package="dev.snehit.imagesync.clipboard_autosend">
+    <!-- READ_LOGS is signature|privileged and grantable only via the one-time
+         adb block (read-logs-auto-text D6); it is declared in the app manifest,
+         not here, alongside the SYSTEM_ALERT_WINDOW background-activity-start
+         lever. The invisible read activity (D5) is transparent, never in
+         recents, single-instance so denial bursts collapse, and not exported. -->
+    <application>
+        <activity
+            android:name="dev.snehit.imagesync.clipboard_autosend.ClipboardReadActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:exported="false"
+            android:launchMode="singleInstance" />
+    </application>
+</manifest>

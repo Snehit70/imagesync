@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:clipboard_autosend/clipboard_autosend.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:screenshot_observer/screenshot_observer.dart';
@@ -12,6 +13,7 @@ import 'package:imagesync/src/receive/payload_receiver.dart';
 import 'package:imagesync/src/receive/received_image_repository.dart';
 import 'package:imagesync/src/receive/received_text_repository.dart';
 import 'package:imagesync/src/settings/app_settings.dart';
+import 'package:imagesync/src/share/share_publisher.dart';
 import 'package:imagesync/src/shared/payload_crypto.dart';
 import 'package:imagesync/src/shared/relay_connection.dart';
 import 'package:imagesync/src/shared/wire.dart';
@@ -560,6 +562,197 @@ void main() {
       expect(watcher.watching, isFalse);
     });
   });
+
+  group('clipboard auto-send watcher', () {
+    test('stays inert when the setting is off (default)', () async {
+      final watcher = _FakeAutoSendWatcher();
+      final harness = _Harness(pairing: pairing, autoSendWatcher: watcher);
+
+      await harness.controller.start();
+
+      expect(watcher.starts, 0);
+      expect(watcher.watching, isFalse);
+    });
+
+    test('starts when the setting is on and READ_LOGS is granted', () async {
+      final watcher = _FakeAutoSendWatcher(granted: true);
+      final harness = _Harness(
+        pairing: pairing,
+        settings: const AppSettings(enableClipboardAutoSend: true),
+        autoSendWatcher: watcher,
+      );
+
+      await harness.controller.start();
+
+      expect(watcher.starts, 1);
+      expect(watcher.watching, isTrue);
+    });
+
+    test('stays inert when enabled but READ_LOGS is not granted', () async {
+      final watcher = _FakeAutoSendWatcher(granted: false);
+      final harness = _Harness(
+        pairing: pairing,
+        settings: const AppSettings(enableClipboardAutoSend: true),
+        autoSendWatcher: watcher,
+      );
+
+      await harness.controller.start();
+
+      expect(watcher.starts, 0);
+      expect(watcher.watching, isFalse);
+      expect(
+        harness.emitted,
+        contains(
+          equals({
+            'kind': 'log',
+            'message':
+                'Clipboard auto-send enabled but READ_LOGS not granted; '
+                'watcher inert. Run the adb setup in Advanced.',
+            'error': false,
+          }),
+        ),
+      );
+    });
+
+    test('publishes an auto-read through the one send path', () async {
+      final watcher = _FakeAutoSendWatcher(granted: true);
+      final harness = _Harness(
+        pairing: pairing,
+        settings: const AppSettings(enableClipboardAutoSend: true),
+        autoSendWatcher: watcher,
+      );
+
+      await harness.controller.start();
+      watcher.emitText('copied on phone');
+      await _waitUntil(() => harness.autoSendPublished.isNotEmpty);
+
+      expect(harness.autoSendPublished, ['copied on phone']);
+    });
+
+    test('echo guard drops an auto-read equal to the last received write',
+        () async {
+      final watcher = _FakeAutoSendWatcher(granted: true);
+      final harness = _Harness(
+        pairing: pairing,
+        settings: const AppSettings(enableClipboardAutoSend: true),
+        autoSendWatcher: watcher,
+      );
+
+      await harness.controller.start();
+      final transport = harness.transports.single;
+      transport.receive({'v': 1, 'kind': 'auth_ok'});
+      transport.receive({
+        'v': 1,
+        'kind': 'payload',
+        'frame': (await _textFrame('from laptop', origin: 'laptop')).toJson(),
+      });
+      await _waitUntil(() => harness.clipboard.texts.contains('from laptop'));
+
+      // The received write trips the watcher; the echo must be dropped.
+      watcher.emitText('from laptop');
+      await _drain();
+      expect(harness.autoSendPublished, isEmpty);
+      expect(
+        harness.emitted,
+        contains(
+          equals({
+            'kind': 'log',
+            'message':
+                'Clipboard auto-send: echo guard dropped a received-payload '
+                're-read.',
+            'error': false,
+          }),
+        ),
+      );
+
+      // Record consumed: a deliberate re-copy of the same text now sends.
+      watcher.emitText('from laptop');
+      await _waitUntil(() => harness.autoSendPublished.isNotEmpty);
+      expect(harness.autoSendPublished, ['from laptop']);
+    });
+
+    test('forwards watcher diagnostics into the debug log', () async {
+      final watcher = _FakeAutoSendWatcher(granted: true);
+      final harness = _Harness(
+        pairing: pairing,
+        settings: const AppSettings(enableClipboardAutoSend: true),
+        autoSendWatcher: watcher,
+      );
+
+      await harness.controller.start();
+      watcher.emitDiagnostic(
+        "Clipboard auto-send watcher started: logcat filter='E ClipboardService' "
+        '(API 35).',
+      );
+      await _drain();
+
+      expect(
+        harness.emitted,
+        contains(
+          equals({
+            'kind': 'log',
+            'message':
+                "Clipboard auto-send watcher started: logcat filter='E "
+                "ClipboardService' (API 35).",
+            'error': false,
+          }),
+        ),
+      );
+    });
+
+    test('stops the watcher when the setting flips off', () async {
+      final watcher = _FakeAutoSendWatcher(granted: true);
+      final harness = _Harness(
+        pairing: pairing,
+        settings: const AppSettings(enableClipboardAutoSend: true),
+        autoSendWatcher: watcher,
+      );
+
+      await harness.controller.start();
+      expect(watcher.watching, isTrue);
+
+      harness.settings = const AppSettings(enableClipboardAutoSend: false);
+      await harness.controller.handleTaskData(const {'kind': 'sync'});
+
+      expect(watcher.stops, 1);
+      expect(watcher.watching, isFalse);
+    });
+
+    test('keeps the watcher running across a reconnect', () async {
+      final watcher = _FakeAutoSendWatcher(granted: true);
+      final harness = _Harness(
+        pairing: pairing,
+        reconnectBackoff: const [Duration(milliseconds: 20)],
+        settings: const AppSettings(enableClipboardAutoSend: true),
+        autoSendWatcher: watcher,
+      );
+
+      await harness.controller.start();
+      expect(watcher.starts, 1);
+
+      await harness.transports.single.drop();
+      await _waitUntil(() => harness.transports.length == 2);
+
+      expect(watcher.starts, 1);
+      expect(watcher.stops, 0);
+      expect(watcher.watching, isTrue);
+    });
+
+    test('stop tears the watcher down', () async {
+      final watcher = _FakeAutoSendWatcher(granted: true);
+      final harness = _Harness(
+        pairing: pairing,
+        settings: const AppSettings(enableClipboardAutoSend: true),
+        autoSendWatcher: watcher,
+      );
+
+      await harness.controller.start();
+      await harness.controller.stop();
+
+      expect(watcher.stops, 1);
+      expect(watcher.watching, isFalse);
+    });
+  });
 }
 
 Future<void> _drain() => pumpEventQueue(times: 200);
@@ -597,12 +790,18 @@ class _Harness {
     List<Duration> reconnectBackoff = const [Duration(minutes: 5)],
     this.settings = const AppSettings(),
     this.screenshotWatcher,
+    this.autoSendWatcher,
     ScreenshotPushController? pushController,
   }) {
     controller = ServiceRelayController(
       reconnectBackoff: reconnectBackoff,
       screenshotWatcher: screenshotWatcher,
       pushController: pushController,
+      clipboardAutoSendWatcher: autoSendWatcher,
+      autoSendPublish: (payload) async {
+        autoSendPublished.add(payload.text ?? '');
+        return autoSendResult;
+      },
       screenOnEvents: screenOn.stream,
       loadPairing: () async => pairing,
       loadSettings: () async => settings,
@@ -634,17 +833,23 @@ class _Harness {
         notifications.add((title: title, text: text));
       },
     );
+    // Mirror the production echo-guard clipboard wrapper: every received-text
+    // write is recorded so the auto-send guard can drop the read it provokes.
+    clipboard.onWrite = controller.recordReceivedClipboardText;
   }
 
   PairingCode? pairing;
   AppSettings settings;
   final screenOn = StreamController<void>.broadcast();
   final _FakeScreenshotWatcher? screenshotWatcher;
+  final _FakeAutoSendWatcher? autoSendWatcher;
   late final ServiceRelayController controller;
   final transports = <_FakeTransport>[];
   final emitted = <Map<String, Object?>>[];
   final notifications = <({String title, String text})>[];
   final clipboard = _RecordingClipboard();
+  final autoSendPublished = <String>[];
+  SharePublishResult autoSendResult = const SharePublishResult.published();
 }
 
 class _FakeTransport implements RelayTransport {
@@ -682,9 +887,14 @@ class _FakeTransport implements RelayTransport {
 class _RecordingClipboard implements AndroidClipboard {
   final texts = <String>[];
 
+  /// Mirrors production's `_EchoGuardClipboard`: invoked after each successful
+  /// received-text write so the auto-send echo guard has a value to match.
+  void Function(String text)? onWrite;
+
   @override
   Future<void> writeText(String text) async {
     texts.add(text);
+    onWrite?.call(text);
   }
 }
 
@@ -744,6 +954,43 @@ class _FakeScreenshotWatcher implements ScreenshotWatcher {
 
   @override
   Stream<ScreenshotEvent> get events => _events.stream;
+
+  @override
+  Stream<String> get diagnostics => _diagnostics.stream;
+}
+
+class _FakeAutoSendWatcher implements ClipboardAutoSendWatcher {
+  _FakeAutoSendWatcher({this.granted = true});
+
+  bool granted;
+  int starts = 0;
+  int stops = 0;
+  bool watching = false;
+
+  final _texts = StreamController<String>.broadcast();
+  final _diagnostics = StreamController<String>.broadcast();
+
+  void emitText(String text) => _texts.add(text);
+
+  void emitDiagnostic(String message) => _diagnostics.add(message);
+
+  @override
+  Future<bool> hasReadLogsPermission() async => granted;
+
+  @override
+  Future<void> start() async {
+    starts++;
+    watching = true;
+  }
+
+  @override
+  Future<void> stop() async {
+    stops++;
+    watching = false;
+  }
+
+  @override
+  Stream<String> get texts => _texts.stream;
 
   @override
   Stream<String> get diagnostics => _diagnostics.stream;

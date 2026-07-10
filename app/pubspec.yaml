@@ -50,6 +50,8 @@ dependencies:
     path: packages/imagesync_clipboard
   screenshot_observer:
     path: packages/screenshot_observer
+  clipboard_autosend:
+    path: packages/clipboard_autosend
 dev_dependencies:
   flutter_test:
     sdk: flutter

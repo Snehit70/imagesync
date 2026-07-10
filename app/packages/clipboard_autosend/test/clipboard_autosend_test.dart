@@ -1,0 +1,92 @@
+import 'package:clipboard_autosend/clipboard_autosend.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  const methodChannel = MethodChannel('imagesync/clipboard_autosend');
+
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(methodChannel, null);
+  });
+
+  test('hasReadLogsPermission forwards the native bool', () async {
+    final calls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(methodChannel, (call) async {
+      calls.add(call.method);
+      return true;
+    });
+
+    final watcher = ChannelClipboardAutoSendWatcher();
+
+    expect(await watcher.hasReadLogsPermission(), isTrue);
+    expect(calls, ['hasReadLogsPermission']);
+  });
+
+  test('hasReadLogsPermission defaults to false when native returns null',
+      () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(methodChannel, (call) async => null);
+
+    final watcher = ChannelClipboardAutoSendWatcher();
+
+    expect(await watcher.hasReadLogsPermission(), isFalse);
+  });
+
+  test('start and stop invoke their channel methods', () async {
+    final calls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(methodChannel, (call) async {
+      calls.add(call.method);
+      return null;
+    });
+
+    final watcher = ChannelClipboardAutoSendWatcher();
+    await watcher.start();
+    await watcher.stop();
+
+    expect(calls, ['start', 'stop']);
+  });
+
+  test('event stream splits text payloads from diagnostics', () async {
+    final watcher = ChannelClipboardAutoSendWatcher(
+      eventChannel: const EventChannel('test/clipboard_autosend_events'),
+    );
+
+    // The split logic is what matters; exercise it directly by pushing through
+    // the raw mapping the channel would deliver.
+    final texts = <String>[];
+    final logs = <String>[];
+    final textSub = watcher.texts.listen(texts.add);
+    final logSub = watcher.diagnostics.listen(logs.add);
+    addTearDown(textSub.cancel);
+    addTearDown(logSub.cancel);
+
+    await _emit('test/clipboard_autosend_events', {
+      'type': 'log',
+      'message': 'started',
+    });
+    await _emit('test/clipboard_autosend_events', {
+      'type': 'text',
+      'text': 'copied words',
+    });
+    await _emit('test/clipboard_autosend_events', {
+      'type': 'text',
+      'text': '',
+    });
+    await Future<void>.delayed(Duration.zero);
+
+    expect(texts, ['copied words']);
+    expect(logs, ['started']);
+  });
+}
+
+Future<void> _emit(String channelName, Map<String, Object?> event) async {
+  const codec = StandardMethodCodec();
+  final message = codec.encodeSuccessEnvelope(event);
+  await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .handlePlatformMessage(channelName, message, (_) {});
+}

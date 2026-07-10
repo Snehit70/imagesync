@@ -45,6 +45,8 @@ class AppSettingsRepository {
       'imagesync.settings.showPersistentSendNotification';
   static const _autoPushScreenshotsKey =
       'imagesync.settings.autoPushScreenshots';
+  static const _enableClipboardAutoSendKey =
+      'imagesync.settings.enableClipboardAutoSend';
   static const _miuiClipboardHintShownKey =
       'imagesync.settings.miuiClipboardHintShown';
 
@@ -55,11 +57,14 @@ class AppSettingsRepository {
       _storage.read(_showReceiveNotificationsKey),
       _storage.read(_showPersistentSendNotificationKey),
       _storage.read(_autoPushScreenshotsKey),
+      _storage.read(_enableClipboardAutoSendKey),
     ]);
     return AppSettings(
       showReceiveNotifications: _readBool(values[0], fallback: true),
       showPersistentSendNotification: _readBool(values[1], fallback: true),
       autoPushScreenshots: _readBool(values[2], fallback: true),
+      // Default off (D1): a normal install is unaffected.
+      enableClipboardAutoSend: _readBool(values[3], fallback: false),
     );
   }
 
@@ -76,6 +81,10 @@ class AppSettingsRepository {
       _storage.write(
         _autoPushScreenshotsKey,
         settings.autoPushScreenshots.toString(),
+      ),
+      _storage.write(
+        _enableClipboardAutoSendKey,
+        settings.enableClipboardAutoSend.toString(),
       ),
     ]);
   }

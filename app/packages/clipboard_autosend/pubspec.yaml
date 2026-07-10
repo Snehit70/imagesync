@@ -1,0 +1,27 @@
+name: clipboard_autosend
+description: >-
+  App-local ImageSync plugin for opt-in READ_LOGS auto-text mode: a process-wide
+  ClipboardService-denial logcat watcher plus a transparent read activity, so a
+  copy on the phone can be published from the headless foreground-service engine.
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ^3.12.2
+  flutter: '>=3.3.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: dev.snehit.imagesync.clipboard_autosend
+        pluginClass: ClipboardAutoSendPlugin

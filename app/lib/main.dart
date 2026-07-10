@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clipboard_autosend/clipboard_autosend.dart';
 import 'package:cryptography/cryptography.dart' show Cryptography;
 import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:flutter/material.dart';
@@ -484,6 +485,7 @@ class _PairingScreenState extends State<PairingScreen>
           settings: _settings,
           onChanged: _updateSettings,
           setupLoader: _setupLoader,
+          clipboardAutoSendWatcher: ChannelClipboardAutoSendWatcher(),
         ),
       ),
     );

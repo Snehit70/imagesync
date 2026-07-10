@@ -12,6 +12,8 @@ void main() {
         showReceiveNotifications: true,
         showPersistentSendNotification: true,
         autoPushScreenshots: true,
+        // Opt-in READ_LOGS auto-text mode is default off (D1).
+        enableClipboardAutoSend: false,
       ),
     );
   });
@@ -23,6 +25,7 @@ void main() {
       showReceiveNotifications: false,
       showPersistentSendNotification: false,
       autoPushScreenshots: false,
+      enableClipboardAutoSend: true,
     );
 
     await repository.save(settings);

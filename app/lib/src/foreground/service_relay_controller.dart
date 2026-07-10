@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clipboard_autosend/clipboard_autosend.dart';
 import 'package:flutter/services.dart';
 import 'package:screenshot_observer/screenshot_observer.dart';
 
@@ -7,6 +8,8 @@ import '../pairing/pairing_code.dart';
 import '../push/screenshot_push_controller.dart';
 import '../receive/payload_receiver.dart';
 import '../settings/app_settings.dart';
+import '../share/share_payload.dart';
+import '../share/share_publisher.dart';
 import '../shared/relay_connection.dart';
 import '../shared/wire.dart';
 
@@ -19,6 +22,12 @@ typedef ServiceReceiverFactory = PayloadReceiver Function(AppSettings settings);
 typedef ServiceEmit = void Function(Map<String, Object?> message);
 typedef ServiceNotificationUpdate =
     Future<void> Function(String title, String text);
+
+/// Publishes an auto-read clipboard payload through the one existing send path
+/// (read-logs-auto-text D3): the manual `SharePublisher.publish`, so auto and
+/// manual sends are indistinguishable on the wire.
+typedef ServiceAutoSendPublish =
+    Future<SharePublishResult> Function(SharePayload payload);
 
 /// Reconnect delays after successive drops; stays at the last entry.
 /// Capped at 32s (keepalive spec D4): steady-state drops are rare after the
@@ -52,6 +61,8 @@ class ServiceRelayController {
     this.screenshotWatcher,
     this.pushController,
     this.screenOnEvents,
+    this.clipboardAutoSendWatcher,
+    this.autoSendPublish,
     this.deviceId = 'phone',
     this.reconnectBackoff = defaultReconnectBackoff,
   });
@@ -82,6 +93,17 @@ class ServiceRelayController {
   /// only [stop] cancels it.
   final Stream<void>? screenOnEvents;
 
+  /// Opt-in READ_LOGS auto-text watcher (read-logs-auto-text D2). When present,
+  /// [_sync] starts it while [AppSettings.enableClipboardAutoSend] is on **and**
+  /// `READ_LOGS` is granted, and stops it otherwise. Its lifetime spans
+  /// reconnects — only [stop] tears it down. Reads it emits are echo-guarded
+  /// (D4) and published through [autoSendPublish] (D3).
+  final ClipboardAutoSendWatcher? clipboardAutoSendWatcher;
+
+  /// The one publish path for auto-read text (D3). Left null when the auto-send
+  /// watcher is absent (tests, no plugin).
+  final ServiceAutoSendPublish? autoSendPublish;
+
   final String deviceId;
   final List<Duration> reconnectBackoff;
 
@@ -92,13 +114,22 @@ class ServiceRelayController {
   StreamSubscription<ScreenshotEvent>? _screenshotEventsSubscription;
   StreamSubscription<String>? _screenshotDiagnosticsSubscription;
   StreamSubscription<void>? _screenOnSubscription;
+  StreamSubscription<String>? _autoSendTextsSubscription;
+  StreamSubscription<String>? _autoSendDiagnosticsSubscription;
   ConnectionStatus _lastStatus = ConnectionStatus.offline;
   bool _screenshotWatching = false;
   bool _screenshotPaused = false;
+  bool _autoSendWatching = false;
+  bool _autoSendInertLogged = false;
   Timer? _reconnectTimer;
   int _reconnectAttempt = 0;
   bool _stopped = false;
   ({String origin, int ts})? _lastHandledFrame;
+
+  /// The exact text last written to the clipboard on behalf of a received
+  /// payload (D4). An auto-read equal to it is dropped before publish, then the
+  /// record is cleared so a genuine re-copy of the same text still sends.
+  String? _lastReceivedClipboardWrite;
 
   Future<void> start() {
     _screenOnSubscription ??= screenOnEvents?.listen((_) => _onScreenOn());
@@ -127,7 +158,15 @@ class ServiceRelayController {
     await _screenOnSubscription?.cancel();
     _screenOnSubscription = null;
     await _stopScreenshotWatcher();
+    await _stopClipboardAutoSendWatcher();
     await _teardown();
+  }
+
+  /// Records the text just written to the clipboard for a received payload, so
+  /// the echo guard (D4) can drop the auto-read it provokes. Called from the
+  /// composition's receive-clipboard wrapper after a successful write.
+  void recordReceivedClipboardText(String text) {
+    _lastReceivedClipboardWrite = text;
   }
 
   Future<void> _sync() async {
@@ -137,6 +176,7 @@ class ServiceRelayController {
     // the pairing check — it must keep watching even while unpaired/offline.
     final settings = await loadSettings();
     await _reconcileScreenshotWatcher(settings);
+    await _reconcileClipboardAutoSendWatcher(settings);
     final pairing = await loadPairing();
     if (pairing == null) {
       _log('No pairing stored; staying offline.');
@@ -273,6 +313,96 @@ class ServiceRelayController {
       'size=${event.sizeBytes} detectedAt=${event.detectedAtEpochMillis}',
     );
     pushController?.handleEvent(event);
+  }
+
+  /// Brings the auto-send watcher in line with the setting and the READ_LOGS
+  /// grant (D2/D-Degrade). Idempotent and safe on every [_sync]: a watcher
+  /// already in the right state is untouched, so reconnects don't churn the
+  /// logcat subprocess. The watcher stays inert (never spawned) unless both the
+  /// setting is on and the grant is present.
+  Future<void> _reconcileClipboardAutoSendWatcher(AppSettings settings) async {
+    final watcher = clipboardAutoSendWatcher;
+    if (watcher == null) return;
+
+    if (!settings.enableClipboardAutoSend) {
+      await _stopClipboardAutoSendWatcher();
+      _autoSendInertLogged = false;
+      return;
+    }
+
+    final granted = await watcher.hasReadLogsPermission();
+    if (granted) {
+      await _startClipboardAutoSendWatcher(watcher);
+    } else {
+      // Setting on but READ_LOGS absent: the watcher would be inert (logcat
+      // sees no system tag), so don't spawn it. The advanced screen's grant
+      // line is the single source of truth; log once, not on every reconnect.
+      await _stopClipboardAutoSendWatcher();
+      if (!_autoSendInertLogged) {
+        _autoSendInertLogged = true;
+        _log(
+          'Clipboard auto-send enabled but READ_LOGS not granted; watcher '
+          'inert. Run the adb setup in Advanced.',
+        );
+      }
+    }
+  }
+
+  Future<void> _startClipboardAutoSendWatcher(
+    ClipboardAutoSendWatcher watcher,
+  ) async {
+    _autoSendInertLogged = false;
+    if (_autoSendWatching) return;
+    _autoSendTextsSubscription = watcher.texts.listen(_onAutoReadText);
+    _autoSendDiagnosticsSubscription = watcher.diagnostics.listen(_log);
+    try {
+      await watcher.start();
+      _autoSendWatching = true;
+    } on PlatformException catch (error) {
+      await _cancelAutoSendSubscriptions();
+      _log(
+        'Clipboard auto-send watcher refused to start: ${error.code} '
+        '(${error.message}).',
+        isError: true,
+      );
+    }
+  }
+
+  Future<void> _stopClipboardAutoSendWatcher() async {
+    await _cancelAutoSendSubscriptions();
+    if (!_autoSendWatching) return;
+    _autoSendWatching = false;
+    try {
+      await clipboardAutoSendWatcher?.stop();
+    } catch (error) {
+      _log('Clipboard auto-send watcher stop failed: $error', isError: true);
+    }
+  }
+
+  Future<void> _cancelAutoSendSubscriptions() async {
+    await _autoSendTextsSubscription?.cancel();
+    _autoSendTextsSubscription = null;
+    await _autoSendDiagnosticsSubscription?.cancel();
+    _autoSendDiagnosticsSubscription = null;
+  }
+
+  /// An auto-read arrived. Drop it if it echoes the last received-payload write
+  /// (D4), otherwise publish it through the one existing send path (D3).
+  Future<void> _onAutoReadText(String text) async {
+    if (text == _lastReceivedClipboardWrite) {
+      // Consume the record so a deliberate re-copy of the same text still sends.
+      _lastReceivedClipboardWrite = null;
+      _log('Clipboard auto-send: echo guard dropped a received-payload re-read.');
+      return;
+    }
+    final publish = autoSendPublish;
+    if (publish == null) return;
+    _log('Clipboard auto-send: forwarding ${text.length} chars to publish.');
+    final result = await publish(SharePayload.text(text));
+    _log(
+      'Clipboard auto-send publish: ${result.message}',
+      isError: !result.published,
+    );
   }
 
   void _setScreenshotPaused(bool paused, {ScreenshotAccessLevel? access}) {

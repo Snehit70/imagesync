@@ -22,6 +22,10 @@
          which Android 12+ applies to notification-button launches (the
          "Send clipboard" action) and MIUI enforces extra strictly. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Opt-in READ_LOGS auto-text mode (read-logs-auto-text D6): signature|
+         privileged, so it is inert on a normal install and grantable only via
+         the one-time adb block surfaced in Advanced → Clipboard auto-send. -->
+    <uses-permission android:name="android.permission.READ_LOGS" />
 
     <application
         android:label="imagesync"

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clipboard_autosend/clipboard_autosend.dart';
 import 'package:cryptography/cryptography.dart' show Cryptography;
 import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
@@ -13,6 +14,7 @@ import '../receive/received_image_repository.dart';
 import '../receive/received_text_repository.dart';
 import '../settings/app_settings.dart';
 import '../settings/app_settings_repository.dart';
+import '../share/share_publisher.dart';
 import '../shared/payload_crypto.dart';
 import '../shared/relay_connection.dart';
 import 'foreground_service_client.dart';
@@ -47,9 +49,25 @@ class ImageSyncForegroundTaskHandler extends TaskHandler {
       const SecureAppSettingsStorage(),
     );
     final screenshotWatcher = ChannelScreenshotWatcher();
+    final autoSendWatcher = ChannelClipboardAutoSendWatcher();
     // One crypto for push and receive so the memoized PBKDF2 key is shared.
     final crypto = PayloadCrypto();
-    return ServiceRelayController(
+    // The auto-send path reuses the manual sender verbatim (D3): auto and manual
+    // text sends are indistinguishable on the wire, with one failure taxonomy.
+    final sharePublisher = SharePublisher(
+      pairingRepository: pairingRepository,
+      relaySessionFactory: (pairing) => RelayConnection(
+        pairing: pairing,
+        deviceId: 'phone',
+        transport: WebSocketRelayTransport.connect(pairing),
+      ),
+      crypto: crypto,
+      fileReader: const LocalShareFileReader(),
+    );
+    // `late` so the receive-clipboard wrapper can call back into the controller's
+    // echo-guard record (D4) — the closure runs long after construction.
+    late final ServiceRelayController controller;
+    controller = ServiceRelayController(
       loadPairing: pairingRepository.load,
       loadSettings: settingsRepository.load,
       screenshotWatcher: screenshotWatcher,
@@ -59,6 +77,8 @@ class ImageSyncForegroundTaskHandler extends TaskHandler {
         emit: FlutterForegroundTask.sendDataToMain,
       ),
       screenOnEvents: ScreenOnEvents().events,
+      clipboardAutoSendWatcher: autoSendWatcher,
+      autoSendPublish: sharePublisher.publish,
       connectionFactory: (pairing) => RelayConnection(
         pairing: pairing,
         deviceId: 'phone',
@@ -66,7 +86,12 @@ class ImageSyncForegroundTaskHandler extends TaskHandler {
       ),
       receiverFactory: (settings) => PayloadReceiver(
         crypto: crypto,
-        clipboard: const FlutterAndroidClipboard(),
+        // Every received-text write is recorded so the auto-send echo guard can
+        // drop the read it provokes (D4).
+        clipboard: _EchoGuardClipboard(
+          const FlutterAndroidClipboard(),
+          controller.recordReceivedClipboardText,
+        ),
         imageClipboard: const ChannelAndroidImageClipboard(),
         receivedTextRepository: const ReceivedTextRepository(
           SecureReceivedPayloadStorage(),
@@ -104,6 +129,7 @@ class ImageSyncForegroundTaskHandler extends TaskHandler {
         );
       },
     );
+    return controller;
   }
 
   @override
@@ -139,6 +165,23 @@ class ImageSyncForegroundTaskHandler extends TaskHandler {
 
   @override
   void onRepeatEvent(DateTime timestamp) {}
+}
+
+/// Wraps the real clipboard so every received-text write is recorded for the
+/// auto-send echo guard (read-logs-auto-text D4). The record is taken only after
+/// the underlying write completes without throwing — a blocked/failed write left
+/// the clipboard unchanged, so it can't provoke an echoing auto-read.
+class _EchoGuardClipboard implements AndroidClipboard {
+  const _EchoGuardClipboard(this._inner, this._record);
+
+  final AndroidClipboard _inner;
+  final void Function(String text) _record;
+
+  @override
+  Future<void> writeText(String text) async {
+    await _inner.writeText(text);
+    _record(text);
+  }
 }
 
 class ImageSyncForegroundServiceClient implements ForegroundServiceClient {

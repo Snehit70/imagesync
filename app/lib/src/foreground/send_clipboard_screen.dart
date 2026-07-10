@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../debug/debug_log.dart';
 import '../share/share_payload.dart';
 import '../share/share_publisher.dart';
 
@@ -37,10 +38,12 @@ class SendClipboardScreen extends StatefulWidget {
     super.key,
     required this.clipboardReader,
     required this.publisher,
+    this.debugLog,
   });
 
   final ClipboardReader clipboardReader;
   final ClipboardSharePublisher publisher;
+  final DebugLog? debugLog;
 
   @override
   State<SendClipboardScreen> createState() => _SendClipboardScreenState();
@@ -94,6 +97,13 @@ class _SendClipboardScreenState extends State<SendClipboardScreen> {
     }
 
     final result = await widget.publisher.publish(SharePayload.text(text));
+    widget.debugLog?.add(
+      'send',
+      result.published
+          ? 'Clipboard text (${text.length} chars) sent to laptop.'
+          : result.message,
+      isError: !result.published,
+    );
     if (!mounted) return;
     setState(() {
       _working = false;

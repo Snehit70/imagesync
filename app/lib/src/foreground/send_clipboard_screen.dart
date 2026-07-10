@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../debug/debug_log.dart';
+import '../design/palette.dart';
+import '../design/widgets.dart';
 import '../share/share_payload.dart';
 import '../share/share_publisher.dart';
 
@@ -52,6 +54,7 @@ class SendClipboardScreen extends StatefulWidget {
 class _SendClipboardScreenState extends State<SendClipboardScreen> {
   String _message = 'Reading clipboard...';
   bool _working = true;
+  bool _sent = false;
 
   @override
   void initState() {
@@ -71,13 +74,57 @@ class _SendClipboardScreenState extends State<SendClipboardScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (_working) const CircularProgressIndicator(),
-              if (_working) const SizedBox(height: 18),
+              if (_working)
+                const SizedBox(
+                  width: 160,
+                  height: 160,
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_sent)
+                // Success orb: raspberry blob with ripple rings radiating out.
+                RippleRings(
+                  size: 160,
+                  child: MorphingBlob(
+                    size: 104,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.check,
+                        size: 24,
+                        color: Palette.raspberry,
+                      ),
+                    ),
+                  ),
+                )
+              else
+                MorphingBlob(
+                  size: 120,
+                  color: Palette.petal,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.priority_high,
+                      size: 22,
+                      color: Palette.raspberry,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 24),
               Text(
                 _message,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleMedium,
-              ),
+              ).entrance(0),
             ],
           ),
         ),
@@ -107,6 +154,7 @@ class _SendClipboardScreenState extends State<SendClipboardScreen> {
     if (!mounted) return;
     setState(() {
       _working = false;
+      _sent = result.published;
       _message = result.published
           ? 'Clipboard sent to laptop.'
           : result.message;

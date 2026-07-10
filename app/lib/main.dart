@@ -5,6 +5,9 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'src/debug/debug_log.dart';
+import 'src/design/palette.dart';
+import 'src/design/theme.dart';
+import 'src/design/widgets.dart';
 import 'src/debug/debug_log_screen.dart';
 import 'src/foreground/foreground_service_client.dart';
 import 'src/foreground/foreground_service_coordinator.dart';
@@ -77,27 +80,9 @@ class ImageSyncApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const ink = Color(0xFF17211B);
-    const signal = Color(0xFF2F8F5B);
-    const paper = Color(0xFFF6F5EF);
-
     return MaterialApp(
       title: 'ImageSync',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: signal,
-          brightness: Brightness.light,
-          surface: paper,
-        ),
-        scaffoldBackgroundColor: paper,
-        textTheme: ThemeData.light().textTheme.apply(
-          bodyColor: ink,
-          displayColor: ink,
-        ),
-        inputDecorationTheme: const InputDecorationTheme(
-          border: OutlineInputBorder(),
-        ),
-      ),
+      theme: buildImageSyncTheme(),
       onGenerateRoute: (settings) {
         final connectionFactory =
             relayConnectionFactory ?? _defaultRelayConnection;
@@ -429,29 +414,30 @@ class _PairingScreenState extends State<PairingScreen> {
       appBar: AppBar(
         title: const Text('ImageSync'),
         actions: [
-          IconButton(
+          _AppBarAction(
             tooltip: 'Debug log',
-            icon: const Icon(Icons.bug_report_outlined),
+            icon: Icons.bug_report_outlined,
             onPressed: _openDebugLog,
           ),
-          IconButton(
+          _AppBarAction(
             tooltip: 'Settings',
-            icon: const Icon(Icons.settings),
+            icon: Icons.settings_outlined,
             onPressed: _openSettings,
           ),
           if (paired)
-            IconButton(
+            _AppBarAction(
               tooltip: 'Reset pairing',
-              icon: const Icon(Icons.link_off),
+              icon: Icons.link_off,
               onPressed: _resetPairing,
             ),
+          const SizedBox(width: 12),
         ],
       ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            _StatusBanner(
+            _StatusHero(
               label: statusLabel,
               description: paired
                   ? 'Paired with ${_pairing!.host}:${_pairing!.port}.'
@@ -462,22 +448,25 @@ class _PairingScreenState extends State<PairingScreen> {
                 ConnectionStatus.offline =>
                   paired ? Icons.cloud_off : Icons.qr_code_scanner,
               },
-            ),
+              searching: _connectionStatus == ConnectionStatus.searching,
+            ).entrance(0),
             if (_shareStatus != null) ...[
               const SizedBox(height: 12),
-              _ShareStatusCard(message: _shareStatus!),
+              _ShareStatusCard(message: _shareStatus!).entrance(1),
             ],
             if (_receiveStatus != null) ...[
               const SizedBox(height: 12),
-              _ShareStatusCard(message: _receiveStatus!),
+              _ShareStatusCard(message: _receiveStatus!).entrance(1),
             ],
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             if (paired)
-              FilledButton.icon(
-                onPressed: _resetPairing,
-                icon: const Icon(Icons.link_off),
-                label: const Text('Reset pairing'),
-              )
+              PressableScale(
+                child: FilledButton.icon(
+                  onPressed: _resetPairing,
+                  icon: const Icon(Icons.link_off),
+                  label: const Text('Reset pairing'),
+                ),
+              ).entrance(2)
             else ...[
               if (widget.relayDiscovery != null) ...[
                 _NearbyRelaysCard(
@@ -486,8 +475,8 @@ class _PairingScreenState extends State<PairingScreen> {
                   discovering: _discovering,
                   onRefresh: _discoverRelays,
                   onSelect: _selectNearbyRelay,
-                ),
-                const SizedBox(height: 24),
+                ).entrance(2),
+                const SizedBox(height: 28),
               ],
               _ManualPairingForm(
                 hostController: _hostController,
@@ -496,7 +485,7 @@ class _PairingScreenState extends State<PairingScreen> {
                 error: _error,
                 onScanQr: _openQrScanner,
                 onPair: _saveManualPairing,
-              ),
+              ).entrance(3),
             ],
           ],
         ),
@@ -505,46 +494,91 @@ class _PairingScreenState extends State<PairingScreen> {
   }
 }
 
-class _StatusBanner extends StatelessWidget {
-  const _StatusBanner({
+class _AppBarAction extends StatelessWidget {
+  const _AppBarAction({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: PressableScale(
+        child: IconButton(
+          tooltip: tooltip,
+          icon: Icon(icon, size: 20, color: Palette.ink),
+          style: IconButton.styleFrom(
+            backgroundColor: Palette.mist,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          onPressed: onPressed,
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusHero extends StatelessWidget {
+  const _StatusHero({
     required this.label,
     required this.description,
     required this.icon,
+    required this.searching,
   });
 
   final String label;
   final String description;
   final IconData icon;
+  final bool searching;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.primaryContainer,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 28, color: colors.onPrimaryContainer),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label, style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 6),
-                  Text(description),
-                ],
-              ),
+    return Column(
+      children: [
+        const SizedBox(height: 16),
+        MorphingBlob(
+          size: 180,
+          child: Container(
+            width: 72,
+            height: 72,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
             ),
+            child: Icon(icon, size: 32, color: Palette.raspberry),
+          ),
+        ),
+        const SizedBox(height: 22),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (searching) ...[
+              const PulsingDot(),
+              const SizedBox(width: 6),
+            ],
+            Text(label, style: textTheme.titleLarge),
           ],
         ),
-      ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Text(
+            description,
+            textAlign: TextAlign.center,
+            style: textTheme.bodyMedium?.copyWith(color: Palette.muted),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -556,19 +590,35 @@ class _ShareStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.secondaryContainer,
-        borderRadius: BorderRadius.circular(8),
+        color: Palette.mist,
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            Icon(Icons.ios_share, color: colors.onSecondaryContainer),
+            Container(
+              width: 38,
+              height: 38,
+              decoration: const BoxDecoration(
+                color: Palette.petal,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.ios_share,
+                size: 18,
+                color: Palette.raspberry,
+              ),
+            ),
             const SizedBox(width: 12),
-            Expanded(child: Text(message)),
+            Expanded(
+              child: Text(
+                message,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
           ],
         ),
       ),
@@ -593,54 +643,69 @@ class _NearbyRelaysCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
+            if (discovering) ...[
+              const PulsingDot(size: 8),
+              const SizedBox(width: 4),
+            ],
             Expanded(
-              child: Text(
-                'Nearby relays',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              child: Text('Nearby relays', style: textTheme.titleMedium),
             ),
-            if (discovering)
-              const Padding(
-                padding: EdgeInsets.all(12),
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-            else
+            if (!discovering)
               IconButton(
                 tooltip: 'Search again',
-                icon: const Icon(Icons.refresh),
+                icon: const Icon(Icons.refresh, size: 20),
+                style: IconButton.styleFrom(
+                  backgroundColor: Palette.mist,
+                  foregroundColor: Palette.raspberry,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
                 onPressed: onRefresh,
               ),
           ],
         ),
+        const SizedBox(height: 10),
         if (relays.isEmpty)
           Text(
             discovering
                 ? 'Searching for relays on this network…'
                 : 'No relays found. Make sure the laptop relay is running, '
                       'or pair manually below.',
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: textTheme.bodyMedium?.copyWith(color: Palette.muted),
           )
         else
           for (final relay in relays)
             Card(
-              margin: const EdgeInsets.only(bottom: 8),
+              margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
-                leading: Icon(Icons.dns, color: colors.primary),
-                title: Text(relay.name),
-                subtitle: Text('${relay.host}:${relay.port}'),
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Palette.petal,
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: const Icon(
+                    Icons.dns,
+                    size: 20,
+                    color: Palette.raspberry,
+                  ),
+                ),
+                title: Text(relay.name, style: textTheme.titleSmall),
+                subtitle: Text(
+                  '${relay.host}:${relay.port}',
+                  style: textTheme.bodySmall?.copyWith(color: Palette.muted),
+                ),
                 trailing: relay == selected
-                    ? Icon(Icons.check_circle, color: colors.primary)
+                    ? const Icon(Icons.check_circle, color: Palette.raspberry)
                     : null,
                 onTap: () => onSelect(relay),
               ),
@@ -649,7 +714,7 @@ class _NearbyRelaysCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             'Enter the pairing secret below and tap Pair manually.',
-            style: Theme.of(context).textTheme.bodyMedium,
+            style: textTheme.bodyMedium?.copyWith(color: Palette.muted),
           ),
         ],
       ],
@@ -679,6 +744,11 @@ class _ManualPairingForm extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Text(
+          'Manual pairing',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 12),
         TextField(
           controller: hostController,
           decoration: const InputDecoration(
@@ -707,22 +777,49 @@ class _ManualPairingForm extends StatelessWidget {
         ),
         if (error != null) ...[
           const SizedBox(height: 12),
-          Text(
-            error!,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Palette.mist,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 18,
+                    color: Palette.error,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      error!,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Palette.error,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
         const SizedBox(height: 20),
-        FilledButton.icon(
-          onPressed: onPair,
-          icon: const Icon(Icons.link),
-          label: const Text('Pair manually'),
+        PressableScale(
+          child: FilledButton.icon(
+            onPressed: onPair,
+            icon: const Icon(Icons.link),
+            label: const Text('Pair manually'),
+          ),
         ),
         const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: onScanQr,
-          icon: const Icon(Icons.qr_code_scanner),
-          label: const Text('Scan QR'),
+        PressableScale(
+          child: OutlinedButton.icon(
+            onPressed: onScanQr,
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scan QR'),
+          ),
         ),
       ],
     );
@@ -743,14 +840,40 @@ class _QrPairingScreenState extends State<QrPairingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Scan QR')),
-      body: MobileScanner(
-        onDetect: (capture) {
-          if (_handled) return;
-          final rawValue = capture.barcodes.firstOrNull?.rawValue;
-          if (rawValue == null || rawValue.isEmpty) return;
-          _handled = true;
-          Navigator.of(context).pop(rawValue);
-        },
+      body: Stack(
+        children: [
+          MobileScanner(
+            onDetect: (capture) {
+              if (_handled) return;
+              final rawValue = capture.barcodes.firstOrNull?.rawValue;
+              if (rawValue == null || rawValue.isEmpty) return;
+              _handled = true;
+              Navigator.of(context).pop(rawValue);
+            },
+          ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Palette.petal,
+                  borderRadius: BorderRadius.all(Radius.circular(999)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
+                  ),
+                  child: Text(
+                    'Point at the QR code on the laptop',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

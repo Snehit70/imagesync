@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../design/widgets.dart';
 import 'app_settings.dart';
 
 typedef AppSettingsChanged = Future<void> Function(AppSettings settings);
@@ -28,28 +29,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          SwitchListTile(
-            value: _settings.showReceiveNotifications,
-            title: const Text('Notify when laptop payloads arrive'),
-            subtitle: const Text(
-              'Show a notification when the laptop sends text or images to the phone.',
+          Card(
+            child: SwitchListTile(
+              contentPadding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
+              value: _settings.showReceiveNotifications,
+              title: const Text('Notify when laptop payloads arrive'),
+              subtitle: const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                  'Show a notification when the laptop sends text or images to the phone.',
+                ),
+              ),
+              onChanged: (value) => _updateSettings(
+                _settings.copyWith(showReceiveNotifications: value),
+              ),
             ),
-            onChanged: (value) => _updateSettings(
-              _settings.copyWith(showReceiveNotifications: value),
+          ).entrance(0),
+          const SizedBox(height: 14),
+          Card(
+            child: SwitchListTile(
+              contentPadding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
+              value: _settings.showPersistentSendNotification,
+              title: const Text('Keep background sync running'),
+              subtitle: const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                  'Shows a persistent notification and keeps the relay connection '
+                  'alive so laptop payloads arrive while the app is closed. Also '
+                  'hosts the Send clipboard shortcut.',
+                ),
+              ),
+              onChanged: (value) => _updateSettings(
+                _settings.copyWith(showPersistentSendNotification: value),
+              ),
             ),
-          ),
-          SwitchListTile(
-            value: _settings.showPersistentSendNotification,
-            title: const Text('Keep background sync running'),
-            subtitle: const Text(
-              'Shows a persistent notification and keeps the relay connection '
-              'alive so laptop payloads arrive while the app is closed. Also '
-              'hosts the Send clipboard shortcut.',
-            ),
-            onChanged: (value) => _updateSettings(
-              _settings.copyWith(showPersistentSendNotification: value),
-            ),
-          ),
+          ).entrance(1),
         ],
       ),
     );

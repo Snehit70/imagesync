@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../design/palette.dart';
 import 'debug_log.dart';
 
 class DebugLogScreen extends StatelessWidget {
@@ -15,9 +16,17 @@ class DebugLogScreen extends StatelessWidget {
         actions: [
           IconButton(
             tooltip: 'Clear log',
-            icon: const Icon(Icons.delete_sweep),
+            icon: const Icon(Icons.delete_sweep, size: 20),
+            style: IconButton.styleFrom(
+              backgroundColor: Palette.mist,
+              foregroundColor: Palette.ink,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
             onPressed: log.clear,
           ),
+          const SizedBox(width: 12),
         ],
       ),
       body: SafeArea(
@@ -26,7 +35,27 @@ class DebugLogScreen extends StatelessWidget {
           builder: (context, _) {
             final entries = log.entries.reversed.toList();
             if (entries.isEmpty) {
-              return const Center(child: Text('No debug events yet.'));
+              return Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: const BoxDecoration(
+                        color: Palette.petal,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.bug_report_outlined,
+                        color: Palette.raspberry,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('No debug events yet.'),
+                  ],
+                ),
+              );
             }
             return ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -48,7 +77,6 @@ class _DebugLogTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final time = entry.timestamp;
     final timeLabel =
@@ -63,7 +91,7 @@ class _DebugLogTile extends StatelessWidget {
             timeLabel,
             style: textTheme.labelSmall?.copyWith(
               fontFeatures: const [FontFeature.tabularFigures()],
-              color: colors.outline,
+              color: Palette.muted,
             ),
           ),
           const SizedBox(width: 10),
@@ -74,14 +102,14 @@ class _DebugLogTile extends StatelessWidget {
                 Text(
                   entry.category,
                   style: textTheme.labelSmall?.copyWith(
-                    color: entry.isError ? colors.error : colors.primary,
+                    color: entry.isError ? Palette.error : Palette.raspberry,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
                   entry.message,
                   style: textTheme.bodySmall?.copyWith(
-                    color: entry.isError ? colors.error : null,
+                    color: entry.isError ? Palette.error : null,
                   ),
                 ),
               ],

@@ -43,7 +43,7 @@ dependencies:
   path_provider: ^2.1.5
   receive_sharing_intent: 1.8.1
   flutter_foreground_task: ^9.2.2
-
+  google_fonts: ^8.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

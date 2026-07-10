@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:imagesync/main.dart';
+import 'package:imagesync/src/design/motion.dart';
 import 'package:imagesync/src/foreground/foreground_service_client.dart';
 import 'package:imagesync/src/pairing/pairing_code.dart';
 import 'package:imagesync/src/pairing/pairing_repository.dart';
@@ -13,6 +14,11 @@ import 'package:imagesync/src/settings/app_settings_repository.dart';
 import 'package:imagesync/src/shared/relay_connection.dart';
 
 void main() {
+  // Looping animations (blob morph, pulsing dots) never settle; disable them
+  // so pumpAndSettle terminates.
+  setUp(() => Motion.loopsEnabled = false);
+  tearDown(() => Motion.loopsEnabled = true);
+
   testWidgets('shows manual pairing when no relay is paired', (tester) async {
     await tester.pumpWidget(
       ImageSyncApp(
@@ -54,6 +60,8 @@ void main() {
       find.widgetWithText(TextField, 'Pairing secret'),
       'secret',
     );
+    await tester.ensureVisible(find.text('Pair manually'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Pair manually'));
     await tester.pumpAndSettle();
 

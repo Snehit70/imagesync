@@ -107,3 +107,84 @@ Append a dated line to the table below after each full run.
 
 | Date | APK commit | Result | Notes |
 |------|-----------|--------|-------|
+
+---
+
+# Seamless Sync acceptance (§8–§12)
+
+Acceptance script for the Seamless Sync effort (`docs/specs/seamless-sync-plan.md`).
+**Run only once the plan's work packages are implemented** — these steps exercise
+features that do not exist in v1. Preconditions on top of §0: onboarding completed with
+full photos access and battery exemption, MIUI toggles applied (No restrictions,
+lock-in-recents, hibernation off), auto-push toggle on.
+
+Log taps used throughout:
+
+```bash
+relay-log() { journalctl --user -u imagesync-relay -o cat "$@"; }   # one JSON object per line
+relay-log -f | jq -c 'select(.message=="clipboard_write") | {nonce, e2eMs}'
+```
+
+Phone-side numbers come from the in-app debug log (bug icon in the app bar).
+
+## 8. Zero-tap receive (laptop → phone)
+
+1. App backgrounded, screen off. On the laptop: `printf 'e2e-zerotap-%s' "$(date +%s)" | wl-copy`.
+2. Wake the phone and paste into any text field — no taps in between.
+   - ✅ Pasted text matches exactly (clipboard was written silently by the service).
+   - ✅ A **quiet** receipt appeared ("Copied from laptop") — no heads-up, no sound.
+   - ✅ Debug log shows the write outcome `confirmed` (not `blocked` / wiring-bug).
+3. Repeat with an image (`grim -g "$(slurp)" - | wl-copy --type image/png`) → paste intact.
+4. Settings → receive notifications **off**, send another text.
+   - ✅ Clipboard still written; no success receipt shown.
+5. If the device reports `blocked` (MIUI): ✅ the one-time MIUI hint appeared exactly
+   once, and the receipt's tap-to-copy still delivers the payload.
+
+## 9. Screenshot auto-push, screen-on ≤2s (phone → laptop)
+
+1. Screen on, connected, app backgrounded. Take ≥10 screenshots, a few seconds apart.
+2. After each: `wl-paste --list-types` on the laptop includes `image/png` and the image matches.
+   - ✅ Zero taps end to end.
+3. Latency, per screenshot: phone debug log `captureToDetectMs` + relay `e2eMs`
+   (`relay-log | jq -r 'select(.message=="clipboard_write") | .e2eMs'`).
+   - ✅ Median of `captureToDetectMs + e2eMs` over the ≥10 samples ≤ **2000ms**.
+4. Burst: five rapid screenshots.
+   - ✅ Laptop clipboard ends with the newest; `screenshot_skipped{reason: superseded}` logged; no crash.
+5. Take a camera photo and save an image from a browser.
+   - ✅ Neither is pushed (filter drops non-screenshots).
+
+## 10. Offline hold and doze delivery
+
+1. Stop the relay (`systemctl --user stop imagesync-relay`). Take a screenshot.
+   - ✅ Phone logs `screenshot_held`.
+2. Start the relay. After the phone reconnects:
+   - ✅ Phone logs `screenshot_republished{heldForMs}`; relay logs the replay signature
+     `device_connected → auth_ok → payload_broadcast{replay: true}`; image lands on the laptop clipboard.
+   - ✅ Exactly one `screenshot_acked` for the frame (no duplicate delivery).
+3. Doze variant: screen off ≥30 min (no charger), then send a text from the laptop
+   (`payload_broadcast.recipients: 0` in the relay log). Wake the phone.
+   - ✅ Payload arrives by the reconnect (delivery gap = `auth_ok.ts − payload_published.ts` in the relay log).
+
+## 11. Screen-on reconnect ≤2s
+
+1. Force a dead socket (e.g. relay stopped ≥5 min so backoff is at its 32s cap, then start the relay), screen off.
+2. Wake the phone (screen on) and immediately watch the relay log.
+   - ✅ `auth_ok{connId}` within **2s** of the screen-on debug-log line on the phone.
+
+## 12. Idle survival (keepalive)
+
+1. Toggles applied (§ preconditions), service running, screen off ≥60 min. Monitor:
+
+   ```bash
+   relay-log -f | jq -c 'select(.message=="socket_reaped" or .message=="device_disconnected" or .message=="device_connected")'
+   ```
+
+   - ✅ **Zero** `socket_reaped` events over the window.
+   - ✅ Any `device_disconnected` carries an attributable `wsCode`/`wsReason` (no silent deaths).
+2. After the window, send one payload each way.
+   - ✅ Both deliver without manual intervention.
+
+## Recording a seamless-sync run
+
+| Date | APK commit | §8 | §9 median ms | §10 | §11 | §12 | Notes |
+|------|-----------|----|--------------|-----|-----|-----|-------|

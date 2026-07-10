@@ -430,7 +430,7 @@ void main() {
       await _drain();
       expect(
         harness.notifications.map((n) => n.text),
-        contains(contains('Auto-send screenshots paused')),
+        contains(contains('Auto-push paused')),
       );
     });
 

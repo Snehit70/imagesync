@@ -350,18 +350,20 @@ class ServiceRelayController {
       ConnectionStatus.offline => 'ImageSync offline',
     };
     if (_screenshotPaused) {
-      // The paused state is persistent and recovery-worthy (§5), so it overrides
-      // the connection copy. WP7 refines this surface; the claim stays intact.
+      // The paused state is persistent and recovery-worthy (§5), so it
+      // overrides the connection copy (#33 decision 3).
       final base = switch (status) {
-        ConnectionStatus.connected => 'Receiving from the laptop.',
+        ConnectionStatus.connected => 'Synced with laptop.',
         ConnectionStatus.searching => 'Looking for the laptop relay...',
         ConnectionStatus.offline => 'Relay unreachable.',
       };
-      return (title, '$base Auto-send screenshots paused — allow all photos.');
+      return (title, '$base Auto-push paused — allow all photos.');
     }
+    // Connection state only, zero-tap copy (#33 decision 3): no per-event
+    // text updates.
     final text = switch (status) {
       ConnectionStatus.connected =>
-        'Receiving from the laptop. Tap Send clipboard to push phone text.',
+        'Synced with laptop — clipboard and screenshots.',
       ConnectionStatus.searching => 'Looking for the laptop relay...',
       ConnectionStatus.offline =>
         'Relay unreachable. Open the app to reconnect.',

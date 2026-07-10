@@ -1,14 +1,17 @@
 package dev.snehit.imagesync.imagesync_clipboard
 
+import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
@@ -24,18 +27,42 @@ import java.io.File
  */
 class ImagesyncClipboardPlugin :
     FlutterPlugin,
-    MethodChannel.MethodCallHandler {
+    MethodChannel.MethodCallHandler,
+    EventChannel.StreamHandler {
     private lateinit var channel: MethodChannel
+    private lateinit var screenOnChannel: EventChannel
     private lateinit var context: Context
+    private var screenOnListener: (() -> Unit)? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
         channel = MethodChannel(binding.binaryMessenger, "imagesync/clipboard")
         channel.setMethodCallHandler(this)
+        screenOnChannel = EventChannel(binding.binaryMessenger, "imagesync/screen_on")
+        screenOnChannel.setStreamHandler(this)
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
+        screenOnChannel.setStreamHandler(null)
+        onCancel(null)
+    }
+
+    // Screen-on events (keepalive spec D5). Each engine's listen adds one
+    // listener to the process-wide receiver; in practice only the service
+    // isolate subscribes.
+    override fun onListen(
+        arguments: Any?,
+        events: EventChannel.EventSink
+    ) {
+        val listener = { events.success(null) }
+        screenOnListener = listener
+        ScreenOnBroadcasts.addListener(context, listener)
+    }
+
+    override fun onCancel(arguments: Any?) {
+        screenOnListener?.let { ScreenOnBroadcasts.removeListener(context, it) }
+        screenOnListener = null
     }
 
     override fun onMethodCall(
@@ -118,4 +145,53 @@ class ImagesyncClipboardPlugin :
         }
         context.startActivity(intent)
     }
+}
+
+/**
+ * Process-wide ACTION_SCREEN_ON fan-out (never plugin-instance state — both
+ * engines instantiate the plugin). The receiver registers on the first
+ * listener and unregisters on the last; onReceive runs on the main thread,
+ * where EventChannel sinks must be called.
+ */
+internal object ScreenOnBroadcasts {
+    private val listeners = mutableSetOf<() -> Unit>()
+    private var receiver: BroadcastReceiver? = null
+
+    @Synchronized
+    fun addListener(
+        context: Context,
+        listener: () -> Unit
+    ) {
+        listeners.add(listener)
+        if (receiver == null) {
+            val screenOnReceiver = object : BroadcastReceiver() {
+                override fun onReceive(
+                    receiverContext: Context?,
+                    intent: Intent?
+                ) {
+                    for (registered in snapshot()) registered()
+                }
+            }
+            receiver = screenOnReceiver
+            context.applicationContext.registerReceiver(
+                screenOnReceiver,
+                IntentFilter(Intent.ACTION_SCREEN_ON)
+            )
+        }
+    }
+
+    @Synchronized
+    fun removeListener(
+        context: Context,
+        listener: () -> Unit
+    ) {
+        listeners.remove(listener)
+        if (listeners.isEmpty()) {
+            receiver?.let { context.applicationContext.unregisterReceiver(it) }
+            receiver = null
+        }
+    }
+
+    @Synchronized
+    private fun snapshot(): List<() -> Unit> = listeners.toList()
 }

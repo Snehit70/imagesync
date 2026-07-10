@@ -15,6 +15,8 @@ export interface RawWebSocketClient {
   /** Next JSON text message from the relay (pings are handled separately). */
   next(): Promise<RelayMessage>;
   send(message: unknown): void;
+  /** Sends a client-initiated WebSocket ping control frame. */
+  ping(): void;
   /** Resolves when the relay closes or terminates the connection. */
   closed: Promise<void>;
   isClosed(): boolean;
@@ -100,6 +102,9 @@ export async function connectRawWebSocket(url: string, options: RawWebSocketOpti
     },
     send(message) {
       socket.write(encodeClientFrame(0x1, new TextEncoder().encode(JSON.stringify(message))));
+    },
+    ping() {
+      socket.write(encodeClientFrame(0x9, new Uint8Array(0)));
     },
     closed,
     isClosed() {

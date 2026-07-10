@@ -175,6 +175,30 @@ describe("relay protocol", () => {
     phone.close();
   });
 
+  test("counts inbound client pings as liveness", async () => {
+    await relay.stop();
+    relay = await createRelay({
+      hostname: "127.0.0.1",
+      port: 0,
+      pairingSecret: secret,
+      maxPayloadBytes: 1024 * 1024,
+      heartbeatIntervalMs: 50,
+      staleAfterMs: 120,
+    });
+
+    // A peer that never answers the relay's pings but sends its own
+    // keepalive pings (the phone's 30s pingInterval): inbound pings must
+    // refresh lastSeen, so it survives the stale windows.
+    const phone = await connectRawWebSocket(relay.url, { respondToPings: false });
+    const keepalive = setInterval(() => phone.ping(), 40);
+
+    await Bun.sleep(400);
+    clearInterval(keepalive);
+    expect(phone.isClosed()).toBe(false);
+
+    phone.close();
+  });
+
   test("re-syncs the pool to a device that reconnects after a drop", async () => {
     const laptop = await connectDevice({ url: relay.url, pairingSecret: secret, deviceId: "laptop" });
     const phone = await connectRawWebSocket(relay.url);

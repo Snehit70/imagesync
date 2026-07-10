@@ -32,3 +32,19 @@ class ImagesyncClipboard {
     return channel.invokeMethod<void>('openClipboardPermissionSettings');
   }
 }
+
+/// Screen-on broadcasts from the native `ACTION_SCREEN_ON` receiver
+/// (keepalive spec D5). Subscribing registers the receiver; cancelling the
+/// last subscription unregisters it. Works in every isolate like the
+/// clipboard channel; the foreground-service isolate is the intended consumer.
+class ScreenOnEvents {
+  ScreenOnEvents({EventChannel? channel})
+    : _channel = channel ?? defaultChannel;
+
+  static const defaultChannel = EventChannel('imagesync/screen_on');
+
+  final EventChannel _channel;
+
+  Stream<void> get events =>
+      _channel.receiveBroadcastStream().map((_) {});
+}

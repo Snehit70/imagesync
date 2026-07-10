@@ -107,17 +107,74 @@ void main() {
       emits({'v': 1, 'kind': 'publish', 'frame': frame.toJson()}),
     );
   });
+
+  test('socket-closed event carries the close code and reason', () async {
+    final transport = FakeRelayTransport();
+    final connection = RelayConnection(
+      pairing: const PairingCode(
+        host: '127.0.0.1',
+        port: 17321,
+        secret: 'pairing-secret',
+      ),
+      deviceId: 'phone',
+      transport: transport,
+    );
+
+    await connection.start();
+    final closedEvent = connection.events.firstWhere(
+      (event) => event.message.startsWith('Relay socket closed'),
+    );
+    transport.closeCode = 1001;
+    transport.closeReason = 'ping timeout';
+    await transport.endIncoming();
+
+    final event = await closedEvent;
+    expect(
+      event.message,
+      'Relay socket closed (code: 1001, reason: ping timeout).',
+    );
+  });
+
+  test('socket-closed event reports a missing close code', () async {
+    final transport = FakeRelayTransport();
+    final connection = RelayConnection(
+      pairing: const PairingCode(
+        host: '127.0.0.1',
+        port: 17321,
+        secret: 'pairing-secret',
+      ),
+      deviceId: 'phone',
+      transport: transport,
+    );
+
+    await connection.start();
+    final closedEvent = connection.events.firstWhere(
+      (event) => event.message.startsWith('Relay socket closed'),
+    );
+    await transport.endIncoming();
+
+    expect((await closedEvent).message, 'Relay socket closed (code: none).');
+  });
 }
 
 class FakeRelayTransport implements RelayTransport {
   final _incoming = StreamController<Object?>();
   final _sent = StreamController<Map<String, Object?>>();
 
+  @override
+  int? closeCode;
+
+  @override
+  String? closeReason;
+
   Stream<Map<String, Object?>> get sent => _sent.stream;
 
   void receive(Map<String, Object?> message) {
     _incoming.add(jsonEncode(message));
   }
+
+  /// Ends the message stream as a closing socket would.
+  Future<void> endIncoming() => _incoming.close();
 
   @override
   Stream<Object?> get messages => _incoming.stream;

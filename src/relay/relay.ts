@@ -143,6 +143,11 @@ export async function createRelay(options: RelayOptions): Promise<RelayHandle> {
       pong(socket) {
         socket.data.lastSeen = Date.now();
       },
+      // The phone's own 30s keepalive pings count as liveness too, so reap
+      // accuracy no longer depends solely on the relay's outbound ping→pong.
+      ping(socket) {
+        socket.data.lastSeen = Date.now();
+      },
       close(socket, wsCode, wsReason) {
         // A reaped socket was already removed by the heartbeat sweep and got
         // its socket_reaped terminal event; skip it so each connection ends

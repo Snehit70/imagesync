@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:imagesync_clipboard/imagesync_clipboard.dart';
 import 'package:screenshot_observer/screenshot_observer.dart';
 
 import '../pairing/pairing_repository.dart';
@@ -40,6 +41,7 @@ class ImageSyncForegroundTaskHandler extends TaskHandler {
       loadPairing: pairingRepository.load,
       loadSettings: settingsRepository.load,
       screenshotWatcher: ChannelScreenshotWatcher(),
+      screenOnEvents: ScreenOnEvents().events,
       connectionFactory: (pairing) => RelayConnection(
         pairing: pairing,
         deviceId: 'phone',

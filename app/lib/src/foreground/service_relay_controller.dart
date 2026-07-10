@@ -20,13 +20,14 @@ typedef ServiceNotificationUpdate =
     Future<void> Function(String title, String text);
 
 /// Reconnect delays after successive drops; stays at the last entry.
+/// Capped at 32s (keepalive spec D4): steady-state drops are rare after the
+/// MIUI toggles, so the cap only bounds screen-on staleness during outages.
 const defaultReconnectBackoff = [
   Duration(seconds: 2),
   Duration(seconds: 4),
   Duration(seconds: 8),
   Duration(seconds: 16),
   Duration(seconds: 32),
-  Duration(seconds: 60),
 ];
 
 /// Owns the relay connection inside the foreground service isolate.
@@ -48,6 +49,7 @@ class ServiceRelayController {
     required this.emit,
     required this.updateNotification,
     this.screenshotWatcher,
+    this.screenOnEvents,
     this.deviceId = 'phone',
     this.reconnectBackoff = defaultReconnectBackoff,
   });
@@ -66,6 +68,13 @@ class ServiceRelayController {
   /// down. Screenshots it emits are the push pipeline's input (#28).
   final ScreenshotWatcher? screenshotWatcher;
 
+  /// Screen-on broadcasts from the native side (keepalive spec D5). An event
+  /// while disconnected resets the backoff and reconnects immediately — the
+  /// user who wakes the phone to screenshot must not wait out a 32s retry.
+  /// A no-op while connected. Subscribed for the controller's whole lifetime;
+  /// only [stop] cancels it.
+  final Stream<void>? screenOnEvents;
+
   final String deviceId;
   final List<Duration> reconnectBackoff;
 
@@ -75,6 +84,8 @@ class ServiceRelayController {
   StreamSubscription<RelayEvent>? _eventSubscription;
   StreamSubscription<ScreenshotEvent>? _screenshotEventsSubscription;
   StreamSubscription<String>? _screenshotDiagnosticsSubscription;
+  StreamSubscription<void>? _screenOnSubscription;
+  ConnectionStatus _lastStatus = ConnectionStatus.offline;
   bool _screenshotWatching = false;
   bool _screenshotPaused = false;
   Timer? _reconnectTimer;
@@ -82,7 +93,20 @@ class ServiceRelayController {
   bool _stopped = false;
   ({String origin, int ts})? _lastHandledFrame;
 
-  Future<void> start() => _sync();
+  Future<void> start() {
+    _screenOnSubscription ??= screenOnEvents?.listen((_) => _onScreenOn());
+    return _sync();
+  }
+
+  /// Screen-on trigger (keepalive spec D5): reconnect immediately if not
+  /// connected, no-op when connected. The debug-log line is the phone-side
+  /// timestamp for the ≤2s screen-on → auth_ok measurement (E2E §11).
+  void _onScreenOn() {
+    if (_stopped || _lastStatus == ConnectionStatus.connected) return;
+    _log('Screen on while disconnected; reconnecting now.');
+    _reconnectAttempt = 0;
+    unawaited(_sync());
+  }
 
   Future<void> handleTaskData(Object? data) async {
     if (data is Map && data['kind'] == 'sync') {
@@ -93,6 +117,8 @@ class ServiceRelayController {
 
   Future<void> stop() async {
     _stopped = true;
+    await _screenOnSubscription?.cancel();
+    _screenOnSubscription = null;
     await _stopScreenshotWatcher();
     await _teardown();
   }
@@ -296,6 +322,7 @@ class ServiceRelayController {
   }
 
   Future<void> _publishStatus(ConnectionStatus status) async {
+    _lastStatus = status;
     emit({'kind': 'status', 'status': status.name});
     final (title, text) = _notificationCopy(status);
     await updateNotification(title, text);

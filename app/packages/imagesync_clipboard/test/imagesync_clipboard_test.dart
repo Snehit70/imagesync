@@ -64,4 +64,23 @@ void main() {
       ),
     );
   });
+
+  test('screen-on events surface each native broadcast', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockStreamHandler(
+          ScreenOnEvents.defaultChannel,
+          MockStreamHandler.inline(
+            onListen: (arguments, events) {
+              events.success(null);
+              events.success(null);
+            },
+          ),
+        );
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockStreamHandler(ScreenOnEvents.defaultChannel, null);
+    });
+
+    expect(await ScreenOnEvents().events.take(2).length, 2);
+  });
 }

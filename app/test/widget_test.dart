@@ -221,6 +221,12 @@ class _QuietRelayTransport implements RelayTransport {
   Stream<Object?> get messages => _messages.stream;
 
   @override
+  int? get closeCode => null;
+
+  @override
+  String? get closeReason => null;
+
+  @override
   void send(Map<String, Object?> message) {}
 
   @override

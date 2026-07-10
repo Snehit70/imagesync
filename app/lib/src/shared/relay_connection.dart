@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/io.dart';
 
 import '../pairing/pairing_code.dart';
 import 'pairing_auth.dart';
@@ -21,6 +21,12 @@ class RelayEvent {
 abstract interface class RelayTransport {
   Stream<Object?> get messages;
 
+  /// WebSocket close code/reason once [messages] is done; null before the
+  /// socket closes (or on transports without the concept).
+  int? get closeCode;
+
+  String? get closeReason;
+
   void send(Map<String, Object?> message);
 
   Future<void> close();
@@ -39,18 +45,35 @@ abstract interface class RelaySession {
 class WebSocketRelayTransport implements RelayTransport {
   WebSocketRelayTransport._(this._channel);
 
-  final WebSocketChannel _channel;
+  final IOWebSocketChannel _channel;
+
+  /// Keepalive cadence mirroring the relay's 30s heartbeat: an unanswered
+  /// ping closes the socket (1001), so one knob buys both path warmth and
+  /// phone-side dead-path detection (keepalive spec D1/D2).
+  static const pingInterval = Duration(seconds: 30);
+
+  /// Fails a connect into a black hole (laptop asleep, wrong network) into
+  /// the backoff loop instead of hanging on OS SYN retries (D3).
+  static const connectTimeout = Duration(seconds: 5);
 
   static WebSocketRelayTransport connect(PairingCode pairing) {
     return WebSocketRelayTransport._(
-      WebSocketChannel.connect(
+      IOWebSocketChannel.connect(
         Uri.parse('ws://${pairing.host}:${pairing.port}'),
+        pingInterval: pingInterval,
+        connectTimeout: connectTimeout,
       ),
     );
   }
 
   @override
   Stream<Object?> get messages => _channel.stream;
+
+  @override
+  int? get closeCode => _channel.closeCode;
+
+  @override
+  String? get closeReason => _channel.closeReason;
 
   @override
   void send(Map<String, Object?> message) {
@@ -92,7 +115,17 @@ class RelayConnection implements RelaySession {
         unawaited(_handleMessage(message));
       },
       onDone: () {
-        _events.add(const RelayEvent('Relay socket closed.'));
+        // Close code tells a 1001 ping-timeout apart from a relay-initiated
+        // close in the debug log (keepalive spec D7).
+        final code = transport.closeCode;
+        final reason = transport.closeReason;
+        _events.add(
+          RelayEvent(
+            'Relay socket closed '
+            '(code: ${code ?? 'none'}'
+            '${reason != null && reason.isNotEmpty ? ', reason: $reason' : ''}).',
+          ),
+        );
         _status.add(ConnectionStatus.offline);
       },
       onError: (Object error) {

@@ -285,6 +285,90 @@ void main() {
     expect(harness.transports.single.closed, isTrue);
   });
 
+  test('default backoff caps at 32 seconds', () {
+    expect(defaultReconnectBackoff.last, const Duration(seconds: 32));
+    expect(
+      defaultReconnectBackoff.map((d) => d.inSeconds),
+      [2, 4, 8, 16, 32],
+    );
+  });
+
+  group('screen-on trigger', () {
+    test('reconnects immediately and resets attempts while disconnected',
+        () async {
+      final harness = _Harness(
+        pairing: pairing,
+        // Effectively-never backoff: only the trigger can reconnect.
+        reconnectBackoff: const [Duration(minutes: 5)],
+      );
+
+      await harness.controller.start();
+      final transport = harness.transports.single;
+      transport.receive({'v': 1, 'kind': 'auth_ok'});
+      await _drain();
+
+      await transport.drop();
+      await _drain();
+      expect(harness.transports, hasLength(1));
+
+      harness.screenOn.add(null);
+      await _waitUntil(() => harness.transports.length == 2);
+
+      expect(
+        harness.emitted,
+        contains(
+          equals({
+            'kind': 'log',
+            'message': 'Screen on while disconnected; reconnecting now.',
+            'error': false,
+          }),
+        ),
+      );
+
+      // The trigger reset the attempt counter: the next scheduled retry
+      // reports attempt 1 again.
+      await harness.transports.last.drop();
+      await _drain();
+      expect(
+        harness.emitted
+            .where(
+              (message) =>
+                  message['kind'] == 'log' &&
+                  (message['message'] as String).startsWith('Connection lost'),
+            )
+            .map((message) => message['message'])
+            .last,
+        contains('(attempt 1)'),
+      );
+    });
+
+    test('is a no-op while connected', () async {
+      final harness = _Harness(pairing: pairing);
+
+      await harness.controller.start();
+      harness.transports.single.receive({'v': 1, 'kind': 'auth_ok'});
+      await _drain();
+
+      harness.screenOn.add(null);
+      await _drain();
+
+      expect(harness.transports, hasLength(1));
+      expect(harness.transports.single.closed, isFalse);
+    });
+
+    test('is ignored after stop', () async {
+      final harness = _Harness(pairing: pairing);
+
+      await harness.controller.start();
+      await harness.controller.stop();
+
+      harness.screenOn.add(null);
+      await _drain();
+
+      expect(harness.transports, hasLength(1));
+    });
+  });
+
   group('screenshot watcher', () {
     test('starts the watcher when auto-push is on and access is full', () async {
       final watcher = _FakeScreenshotWatcher();
@@ -449,6 +533,7 @@ class _Harness {
     controller = ServiceRelayController(
       reconnectBackoff: reconnectBackoff,
       screenshotWatcher: screenshotWatcher,
+      screenOnEvents: screenOn.stream,
       loadPairing: () async => pairing,
       loadSettings: () async => settings,
       connectionFactory: (pairing) {
@@ -483,6 +568,7 @@ class _Harness {
 
   PairingCode? pairing;
   AppSettings settings;
+  final screenOn = StreamController<void>.broadcast();
   final _FakeScreenshotWatcher? screenshotWatcher;
   late final ServiceRelayController controller;
   final transports = <_FakeTransport>[];
@@ -494,6 +580,12 @@ class _Harness {
 class _FakeTransport implements RelayTransport {
   final _messages = StreamController<Object?>.broadcast();
   bool closed = false;
+
+  @override
+  int? closeCode;
+
+  @override
+  String? closeReason;
 
   void receive(Map<String, Object?> message) => _messages.add(message);
 

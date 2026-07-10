@@ -8,12 +8,18 @@ interface RelayOptions {
   pairingSecret: string;
   maxPayloadBytes: number;
   pool?: PayloadPool;
+  heartbeatIntervalMs?: number;
+  staleAfterMs?: number;
 }
+
+const defaultHeartbeatIntervalMs = 30_000;
+const defaultStaleAfterMs = 90_000;
 
 interface DeviceSocketData {
   challenge: string;
   authenticated: boolean;
   deviceId?: string;
+  lastSeen: number;
 }
 
 type RelaySocket = Bun.ServerWebSocket<DeviceSocketData>;
@@ -27,9 +33,26 @@ export interface RelayHandle {
 export async function createRelay(options: RelayOptions): Promise<RelayHandle> {
   const pool = options.pool ?? new PayloadPool();
   const devices = new Set<RelaySocket>();
+  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? defaultHeartbeatIntervalMs;
+  const staleAfterMs = options.staleAfterMs ?? defaultStaleAfterMs;
   const unsubscribe = pool.subscribe((frame, source) => {
     broadcast(devices, source, { v: 1, kind: "payload", frame });
   });
+
+  // Reap sockets whose peer went away without a close frame (WiFi drop,
+  // phone killed). Pings keep lastSeen fresh on healthy connections; a
+  // socket that stays silent past staleAfterMs is terminated.
+  const heartbeat = setInterval(() => {
+    const now = Date.now();
+    for (const socket of devices) {
+      if (now - socket.data.lastSeen > staleAfterMs) {
+        devices.delete(socket);
+        socket.terminate();
+        continue;
+      }
+      socket.ping();
+    }
+  }, heartbeatIntervalMs);
 
   const server = Bun.serve<DeviceSocketData>({
     hostname: options.hostname,
@@ -40,6 +63,7 @@ export async function createRelay(options: RelayOptions): Promise<RelayHandle> {
           data: {
             challenge: randomBase64(24),
             authenticated: false,
+            lastSeen: Date.now(),
           },
         })
       ) {
@@ -58,6 +82,7 @@ export async function createRelay(options: RelayOptions): Promise<RelayHandle> {
         });
       },
       async message(socket, rawMessage) {
+        socket.data.lastSeen = Date.now();
         const message = parseMessage(rawMessage);
         if (!message) {
           sendError(socket, "bad_message", "Message must be valid JSON.");
@@ -82,6 +107,9 @@ export async function createRelay(options: RelayOptions): Promise<RelayHandle> {
         await pool.publish(message.frame, socket);
         send(socket, { v: 1, kind: "ack", ts: message.frame.ts });
       },
+      pong(socket) {
+        socket.data.lastSeen = Date.now();
+      },
       close(socket) {
         devices.delete(socket);
       },
@@ -92,6 +120,7 @@ export async function createRelay(options: RelayOptions): Promise<RelayHandle> {
     url: `ws://${server.hostname}:${server.port}`,
     pool,
     async stop() {
+      clearInterval(heartbeat);
       unsubscribe();
       server.stop(true);
       devices.clear();

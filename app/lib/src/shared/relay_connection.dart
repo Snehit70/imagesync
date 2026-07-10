@@ -110,7 +110,12 @@ class RelayConnection implements RelaySession {
   @override
   Future<void> close() async {
     await _subscription?.cancel();
-    await transport.close();
+    try {
+      await transport.close();
+    } on Object {
+      // A transport that never finished connecting can throw on close;
+      // the connection is being discarded either way.
+    }
     await _status.close();
     await _payloads.close();
     await _events.close();

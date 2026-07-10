@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { connectDevice } from "../src/relay/client";
 import { createRelay } from "../src/relay/relay";
 import { encryptPayload } from "../src/shared/crypto";
+import { authenticateRawClient, connectRawWebSocket } from "./helpers/raw-ws-client";
 
 const secret = "pairing-secret-for-tests";
 
@@ -119,6 +120,93 @@ describe("relay protocol", () => {
     laptop.close();
     phone.close();
     lateJoiner.close();
+  });
+
+  test("reaps a stale socket that stops answering heartbeat pings", async () => {
+    await relay.stop();
+    relay = await createRelay({
+      hostname: "127.0.0.1",
+      port: 0,
+      pairingSecret: secret,
+      maxPayloadBytes: 1024 * 1024,
+      heartbeatIntervalMs: 50,
+      staleAfterMs: 120,
+    });
+
+    // A peer that vanished (WiFi drop, killed process): TCP stays open,
+    // but nothing — not even pongs — ever comes back.
+    const vanished = await connectRawWebSocket(relay.url, { respondToPings: false });
+
+    await expect(vanished.closed).resolves.toBeUndefined();
+  });
+
+  test("keeps a pong-answering device connected across stale windows", async () => {
+    await relay.stop();
+    relay = await createRelay({
+      hostname: "127.0.0.1",
+      port: 0,
+      pairingSecret: secret,
+      maxPayloadBytes: 1024 * 1024,
+      heartbeatIntervalMs: 50,
+      staleAfterMs: 120,
+    });
+
+    const phone = await connectRawWebSocket(relay.url);
+    await authenticateRawClient(phone, secret, "phone");
+
+    // Sit through several heartbeat + stale windows; pongs keep it alive.
+    await Bun.sleep(400);
+    expect(phone.isClosed()).toBe(false);
+
+    // And the connection still works end-to-end: a publish is acked.
+    const frame = await encryptPayload(
+      {
+        type: "text",
+        mime: "text/plain",
+        origin: "phone",
+        ts: 1_800_000_000_040,
+      },
+      new TextEncoder().encode("still alive"),
+      secret,
+    );
+    phone.send({ v: 1, kind: "publish", frame });
+    await expect(phone.next()).resolves.toMatchObject({ kind: "ack", ts: 1_800_000_000_040 });
+
+    phone.close();
+  });
+
+  test("re-syncs the pool to a device that reconnects after a drop", async () => {
+    const laptop = await connectDevice({ url: relay.url, pairingSecret: secret, deviceId: "laptop" });
+    const phone = await connectRawWebSocket(relay.url);
+    await authenticateRawClient(phone, secret, "phone");
+
+    const frame = await encryptPayload(
+      {
+        type: "text",
+        mime: "text/plain",
+        origin: "laptop",
+        ts: 1_800_000_000_050,
+      },
+      new TextEncoder().encode("survives reconnect"),
+      secret,
+    );
+    await laptop.publish(frame);
+    await expect(phone.next()).resolves.toMatchObject({
+      kind: "payload",
+      frame: { origin: "laptop", ts: 1_800_000_000_050 },
+    });
+
+    phone.close();
+    const phoneAgain = await connectRawWebSocket(relay.url);
+    await authenticateRawClient(phoneAgain, secret, "phone");
+
+    await expect(phoneAgain.next()).resolves.toMatchObject({
+      kind: "payload",
+      frame: { origin: "laptop", ts: 1_800_000_000_050 },
+    });
+
+    laptop.close();
+    phoneAgain.close();
   });
 
   test("rejects oversized payloads with a clear error", async () => {

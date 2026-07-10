@@ -161,6 +161,119 @@ void main() {
     expect(harness.emitted.last, {'kind': 'status', 'status': 'offline'});
   });
 
+  test('reconnects with backoff after the socket drops', () async {
+    final harness = _Harness(
+      pairing: pairing,
+      reconnectBackoff: const [Duration(milliseconds: 20)],
+    );
+
+    await harness.controller.start();
+    final transport = harness.transports.single;
+    transport.receive({'v': 1, 'kind': 'auth_ok'});
+    await _drain();
+
+    await transport.drop();
+    await _waitUntil(() => harness.transports.length == 2);
+    harness.transports.last.receive({'v': 1, 'kind': 'auth_ok'});
+    await _drain();
+
+    expect(harness.emitted.last, {'kind': 'status', 'status': 'connected'});
+    expect(
+      harness.emitted,
+      contains(
+        equals({
+          'kind': 'log',
+          'message': 'Connection lost; retrying in 0s (attempt 1).',
+          'error': false,
+        }),
+      ),
+    );
+  });
+
+  test('successful reconnect resets the backoff schedule', () async {
+    final harness = _Harness(
+      pairing: pairing,
+      reconnectBackoff: const [
+        Duration(milliseconds: 20),
+        Duration(minutes: 5),
+      ],
+    );
+
+    await harness.controller.start();
+    harness.transports.single.receive({'v': 1, 'kind': 'auth_ok'});
+    await _drain();
+
+    await harness.transports.single.drop();
+    await _waitUntil(() => harness.transports.length == 2);
+    harness.transports.last.receive({'v': 1, 'kind': 'auth_ok'});
+    await _drain();
+
+    // A second drop must start over at the first (short) delay, not
+    // escalate to the five-minute entry.
+    await harness.transports.last.drop();
+    await _waitUntil(() => harness.transports.length == 3);
+
+    expect(
+      harness.emitted
+          .where(
+            (message) =>
+                message['kind'] == 'log' &&
+                (message['message'] as String).startsWith('Connection lost'),
+          )
+          .map((message) => message['message']),
+      everyElement(contains('(attempt 1)')),
+    );
+  });
+
+  test('stop cancels a pending reconnect', () async {
+    final harness = _Harness(
+      pairing: pairing,
+      reconnectBackoff: const [Duration(milliseconds: 20)],
+    );
+
+    await harness.controller.start();
+    harness.transports.single.receive({'v': 1, 'kind': 'auth_ok'});
+    await _drain();
+
+    await harness.transports.single.drop();
+    await harness.controller.stop();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    expect(harness.transports, hasLength(1));
+  });
+
+  test('skips the pool re-send of an already handled frame', () async {
+    final harness = _Harness(
+      pairing: pairing,
+      reconnectBackoff: const [Duration(milliseconds: 20)],
+    );
+    final frame = await _textFrame('sticky payload', origin: 'laptop', ts: 7);
+
+    await harness.controller.start();
+    final transport = harness.transports.single;
+    transport.receive({'v': 1, 'kind': 'auth_ok'});
+    transport.receive({'v': 1, 'kind': 'payload', 'frame': frame.toJson()});
+    await _waitUntil(() => harness.clipboard.texts.length == 1);
+
+    // Drop and reconnect: the relay re-sends its current pool payload.
+    await transport.drop();
+    await _waitUntil(() => harness.transports.length == 2);
+    final reconnected = harness.transports.last;
+    reconnected.receive({'v': 1, 'kind': 'auth_ok'});
+    reconnected.receive({'v': 1, 'kind': 'payload', 'frame': frame.toJson()});
+    // Give the duplicate ample time to (wrongly) reach the receiver.
+    await Future<void>.delayed(const Duration(seconds: 2));
+
+    expect(harness.clipboard.texts, ['sticky payload']);
+
+    // A genuinely new payload still comes through.
+    final fresh = await _textFrame('fresh payload', origin: 'laptop', ts: 8);
+    reconnected.receive({'v': 1, 'kind': 'payload', 'frame': fresh.toJson()});
+    await _waitUntil(() => harness.clipboard.texts.length == 2);
+
+    expect(harness.clipboard.texts, ['sticky payload', 'fresh payload']);
+  });
+
   test('stop closes the connection', () async {
     final harness = _Harness(pairing: pairing);
 
@@ -186,13 +299,13 @@ Future<void> _waitUntil(
   }
 }
 
-Future<PayloadFrame> _textFrame(String text, {required String origin}) {
+Future<PayloadFrame> _textFrame(String text, {required String origin, int ts = 1}) {
   return PayloadCrypto().encrypt(
     metadata: PayloadMetadata(
       type: PayloadType.text,
       mime: 'text/plain',
       origin: origin,
-      ts: 1,
+      ts: ts,
     ),
     plaintext: text.codeUnits,
     pairingSecret: 'pairing-secret',
@@ -200,8 +313,13 @@ Future<PayloadFrame> _textFrame(String text, {required String origin}) {
 }
 
 class _Harness {
-  _Harness({required this.pairing}) {
+  _Harness({
+    required this.pairing,
+    // Effectively "never" so tests without a reconnect stay deterministic.
+    List<Duration> reconnectBackoff = const [Duration(minutes: 5)],
+  }) {
     controller = ServiceRelayController(
+      reconnectBackoff: reconnectBackoff,
       loadPairing: () async => pairing,
       loadSettings: () async => const AppSettings(),
       connectionFactory: (pairing) {
@@ -247,6 +365,10 @@ class _FakeTransport implements RelayTransport {
   bool closed = false;
 
   void receive(Map<String, Object?> message) => _messages.add(message);
+
+  /// Simulates the peer vanishing: the message stream ends without the
+  /// controller having asked for [close].
+  Future<void> drop() => _messages.close();
 
   @override
   Stream<Object?> get messages => _messages.stream;

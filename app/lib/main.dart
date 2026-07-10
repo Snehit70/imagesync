@@ -231,6 +231,8 @@ class _PairingScreenState extends State<PairingScreen> {
         if (message is String) {
           _debugLog.add('service', message, isError: data['error'] == true);
         }
+      case 'sendClipboard':
+        Navigator.of(context).pushNamed(sendClipboardRoute);
     }
   }
 

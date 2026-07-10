@@ -88,7 +88,11 @@ class ImageSyncForegroundTaskHandler extends TaskHandler {
   @override
   void onNotificationButtonPressed(String id) {
     if (id == sendClipboardButtonId) {
-      FlutterForegroundTask.launchApp(sendClipboardRoute);
+      // launchApp(route) only loads the route on a cold start; the service
+      // keeps the app process alive, so it's always warm here. Route via the
+      // existing data channel to PairingScreen instead.
+      FlutterForegroundTask.sendDataToMain({'kind': 'sendClipboard'});
+      FlutterForegroundTask.launchApp();
     }
   }
 

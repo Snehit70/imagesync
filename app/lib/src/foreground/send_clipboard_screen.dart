@@ -41,11 +41,15 @@ class SendClipboardScreen extends StatefulWidget {
     required this.clipboardReader,
     required this.publisher,
     this.debugLog,
+    this.readRetryAttempts = 10,
+    this.readRetryDelay = const Duration(milliseconds: 250),
   });
 
   final ClipboardReader clipboardReader;
   final ClipboardSharePublisher publisher;
   final DebugLog? debugLog;
+  final int readRetryAttempts;
+  final Duration readRetryDelay;
 
   @override
   State<SendClipboardScreen> createState() => _SendClipboardScreenState();
@@ -133,7 +137,21 @@ class _SendClipboardScreenState extends State<SendClipboardScreen> {
   }
 
   Future<void> _sendClipboard() async {
-    final text = await widget.clipboardReader.readText();
+    // Android 10+ only allows clipboard reads once this window has input
+    // focus, which lands a few frames after a cold launch from the
+    // notification button — so an early empty read may just mean "not
+    // focused yet". Retry briefly before concluding the clipboard is empty.
+    var text = await widget.clipboardReader.readText();
+    for (
+      var attempt = 0;
+      (text == null || text.trim().isEmpty) &&
+          attempt < widget.readRetryAttempts;
+      attempt += 1
+    ) {
+      await Future<void>.delayed(widget.readRetryDelay);
+      if (!mounted) return;
+      text = await widget.clipboardReader.readText();
+    }
     if (!mounted) return;
     if (text == null || text.trim().isEmpty) {
       setState(() {

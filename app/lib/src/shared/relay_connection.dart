@@ -9,6 +9,15 @@ import 'wire.dart';
 
 enum ConnectionStatus { searching, connected, offline }
 
+/// A protocol-level event worth surfacing in the debug log: auth handshake
+/// results, relay errors, socket lifecycle.
+class RelayEvent {
+  const RelayEvent(this.message, {this.isError = false});
+
+  final String message;
+  final bool isError;
+}
+
 abstract interface class RelayTransport {
   Stream<Object?> get messages;
 
@@ -65,12 +74,15 @@ class RelayConnection implements RelaySession {
 
   final _status = StreamController<ConnectionStatus>.broadcast();
   final _payloads = StreamController<PayloadFrame>.broadcast();
+  final _events = StreamController<RelayEvent>.broadcast();
   StreamSubscription<Object?>? _subscription;
 
   @override
   Stream<ConnectionStatus> get status => _status.stream;
 
   Stream<PayloadFrame> get payloads => _payloads.stream;
+
+  Stream<RelayEvent> get events => _events.stream;
 
   @override
   Future<void> start() async {
@@ -79,8 +91,14 @@ class RelayConnection implements RelaySession {
       (message) {
         unawaited(_handleMessage(message));
       },
-      onDone: () => _status.add(ConnectionStatus.offline),
-      onError: (_) => _status.add(ConnectionStatus.offline),
+      onDone: () {
+        _events.add(const RelayEvent('Relay socket closed.'));
+        _status.add(ConnectionStatus.offline);
+      },
+      onError: (Object error) {
+        _events.add(RelayEvent('Relay socket error: $error', isError: true));
+        _status.add(ConnectionStatus.offline);
+      },
     );
   }
 
@@ -95,6 +113,7 @@ class RelayConnection implements RelaySession {
     await transport.close();
     await _status.close();
     await _payloads.close();
+    await _events.close();
   }
 
   Future<void> _handleMessage(Object? rawMessage) async {
@@ -102,6 +121,7 @@ class RelayConnection implements RelaySession {
     switch (message['kind']) {
       case 'hello':
         final challenge = _stringField(message, 'challenge');
+        _events.add(const RelayEvent('Challenge received, sending proof.'));
         transport.send({
           'v': 1,
           'kind': 'auth',
@@ -113,10 +133,20 @@ class RelayConnection implements RelaySession {
           ),
         });
       case 'auth_ok':
+        _events.add(const RelayEvent('Auth accepted by relay.'));
         _status.add(ConnectionStatus.connected);
       case 'payload':
         _payloads.add(PayloadFrame.fromJson(message['frame']));
       case 'error':
+        final code = message['code'];
+        final detail = message['message'];
+        _events.add(
+          RelayEvent(
+            'Relay error${code is String ? ' [$code]' : ''}: '
+            '${detail is String ? detail : 'unknown'}',
+            isError: true,
+          ),
+        );
         _status.add(ConnectionStatus.offline);
       default:
         break;

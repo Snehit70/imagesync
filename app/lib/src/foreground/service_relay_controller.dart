@@ -42,6 +42,7 @@ class ServiceRelayController {
   RelayConnection? _connection;
   PayloadReceiveController? _receiveController;
   StreamSubscription<ConnectionStatus>? _statusSubscription;
+  StreamSubscription<RelayEvent>? _eventSubscription;
 
   Future<void> start() => _sync();
 
@@ -57,24 +58,32 @@ class ServiceRelayController {
     await _teardown();
     final pairing = await loadPairing();
     if (pairing == null) {
+      _log('No pairing stored; staying offline.');
       await _publishStatus(ConnectionStatus.offline);
       return;
     }
+    _log('Connecting to relay at ${pairing.host}:${pairing.port}.');
     final settings = await loadSettings();
     final connection = connectionFactory(pairing);
     _connection = connection;
     _statusSubscription = connection.status.listen((status) {
       unawaited(_publishStatus(status));
     });
+    _eventSubscription = connection.events.listen((event) {
+      _log(event.message, isError: event.isError);
+    });
     _receiveController = PayloadReceiveController(
       frames: connection.payloads.where((frame) => frame.origin != deviceId),
       pairingSecret: pairing.secret,
       receiver: receiverFactory(settings),
-      onResult: (result) {
+      onResult: (frame, result) {
         emit({
           'kind': 'receive',
           'received': result.received,
           'message': result.message,
+          'type': frame.type.wireName,
+          'size': _payloadSizeBytes(frame.payload),
+          'origin': frame.origin,
         });
       },
     )..start();
@@ -84,10 +93,26 @@ class ServiceRelayController {
   Future<void> _teardown() async {
     await _statusSubscription?.cancel();
     _statusSubscription = null;
+    await _eventSubscription?.cancel();
+    _eventSubscription = null;
     await _receiveController?.dispose();
     _receiveController = null;
     await _connection?.close();
     _connection = null;
+  }
+
+  void _log(String message, {bool isError = false}) {
+    emit({'kind': 'log', 'message': message, 'error': isError});
+  }
+
+  /// Decoded size of the base64 ciphertext — the bytes that crossed the wire.
+  int _payloadSizeBytes(String base64Payload) {
+    final padding = base64Payload.endsWith('==')
+        ? 2
+        : base64Payload.endsWith('=')
+        ? 1
+        : 0;
+    return (base64Payload.length ~/ 4) * 3 - padding;
   }
 
   Future<void> _publishStatus(ConnectionStatus status) async {

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import 'src/debug/debug_log.dart';
+import 'src/debug/debug_log_screen.dart';
 import 'src/foreground/foreground_service_client.dart';
 import 'src/foreground/foreground_service_coordinator.dart';
 import 'src/foreground/imagesync_foreground_service.dart';
@@ -61,6 +63,7 @@ class ImageSyncApp extends StatelessWidget {
     this.relayDiscovery,
     this.shareSource,
     this.receiveNotificationTapHandler,
+    this.debugLog,
   });
 
   final AppSettingsRepository appSettingsRepository;
@@ -70,6 +73,7 @@ class ImageSyncApp extends StatelessWidget {
   final RelayDiscovery? relayDiscovery;
   final ShareSource? shareSource;
   final ReceiveNotificationTapHandler? receiveNotificationTapHandler;
+  final DebugLog? debugLog;
 
   @override
   Widget build(BuildContext context) {
@@ -97,6 +101,7 @@ class ImageSyncApp extends StatelessWidget {
       onGenerateRoute: (settings) {
         final connectionFactory =
             relayConnectionFactory ?? _defaultRelayConnection;
+        final log = debugLog ?? sharedDebugLog;
         if (settings.name == sendClipboardRoute) {
           return MaterialPageRoute(
             builder: (_) => SendClipboardScreen(
@@ -109,6 +114,7 @@ class ImageSyncApp extends StatelessWidget {
                   fileReader: const LocalShareFileReader(),
                 ),
               ),
+              debugLog: log,
             ),
             settings: settings,
           );
@@ -122,6 +128,7 @@ class ImageSyncApp extends StatelessWidget {
             relayDiscovery: relayDiscovery,
             shareSource: shareSource,
             receiveNotificationTapHandler: receiveNotificationTapHandler,
+            debugLog: log,
           ),
           settings: settings,
         );
@@ -148,6 +155,7 @@ class PairingScreen extends StatefulWidget {
     this.relayDiscovery,
     this.shareSource,
     this.receiveNotificationTapHandler,
+    this.debugLog,
   });
 
   final AppSettingsRepository appSettingsRepository;
@@ -157,6 +165,7 @@ class PairingScreen extends StatefulWidget {
   final RelayDiscovery? relayDiscovery;
   final ShareSource? shareSource;
   final ReceiveNotificationTapHandler? receiveNotificationTapHandler;
+  final DebugLog? debugLog;
 
   @override
   State<PairingScreen> createState() => _PairingScreenState();
@@ -180,6 +189,7 @@ class _PairingScreenState extends State<PairingScreen> {
   String? _shareStatus;
   String? _receiveStatus;
   bool _loading = true;
+  late final DebugLog _debugLog = widget.debugLog ?? sharedDebugLog;
 
   @override
   void initState() {
@@ -188,6 +198,7 @@ class _PairingScreenState extends State<PairingScreen> {
     final tapHandler = widget.receiveNotificationTapHandler;
     if (tapHandler != null) {
       tapHandler.onCopied = (message) {
+        _debugLog.add('clipboard', message);
         if (mounted) setState(() => _receiveStatus = message);
       };
       unawaited(tapHandler.init());
@@ -213,14 +224,43 @@ class _PairingScreenState extends State<PairingScreen> {
             .where((value) => value.name == data['status'])
             .firstOrNull;
         if (status != null) {
+          _debugLog.add(
+            'connection',
+            'Status: ${status.name}',
+            isError: status == ConnectionStatus.offline,
+          );
           setState(() => _connectionStatus = status);
         }
       case 'receive':
         final message = data['message'];
         if (message is String) {
+          _debugLog.add(
+            'receive',
+            _describeReceive(data, message),
+            isError: data['received'] == false,
+          );
           setState(() => _receiveStatus = message);
         }
+      case 'log':
+        final message = data['message'];
+        if (message is String) {
+          _debugLog.add('service', message, isError: data['error'] == true);
+        }
     }
+  }
+
+  String _describeReceive(Map<Object?, Object?> data, String message) {
+    final type = data['type'];
+    final size = data['size'];
+    final origin = data['origin'];
+    if (type is! String || size is! int || origin is! String) return message;
+    return '$type (${_formatBytes(size)}) from $origin — $message';
+  }
+
+  String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
   Future<void> _loadPairing() async {
@@ -334,12 +374,19 @@ class _PairingScreenState extends State<PairingScreen> {
         fileReader: const LocalShareFileReader(),
       ),
       onResult: (result) {
+        _debugLog.add('send', result.message, isError: !result.published);
         if (!mounted) return;
         setState(() => _shareStatus = result.message);
       },
     );
     _shareIntakeController = controller;
     await controller.start();
+  }
+
+  Future<void> _openDebugLog() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => DebugLogScreen(log: _debugLog)),
+    );
   }
 
   Future<void> _openSettings() async {
@@ -382,6 +429,11 @@ class _PairingScreenState extends State<PairingScreen> {
       appBar: AppBar(
         title: const Text('ImageSync'),
         actions: [
+          IconButton(
+            tooltip: 'Debug log',
+            icon: const Icon(Icons.bug_report_outlined),
+            onPressed: _openDebugLog,
+          ),
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings),

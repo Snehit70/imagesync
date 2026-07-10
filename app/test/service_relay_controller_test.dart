@@ -27,6 +27,7 @@ void main() {
 
     expect(harness.transports, isEmpty);
     expect(harness.emitted, [
+      {'kind': 'log', 'message': 'No pairing stored; staying offline.', 'error': false},
       {'kind': 'status', 'status': 'offline'},
     ]);
     expect(harness.notifications.single.title, 'ImageSync offline');
@@ -45,9 +46,46 @@ void main() {
       contains(equals({'kind': 'status', 'status': 'connected'})),
     );
     expect(
+      harness.emitted,
+      containsAll([
+        {
+          'kind': 'log',
+          'message': 'Connecting to relay at 192.168.1.10:17321.',
+          'error': false,
+        },
+        {'kind': 'log', 'message': 'Auth accepted by relay.', 'error': false},
+      ]),
+    );
+    expect(
       harness.notifications.map((n) => n.title),
       contains('ImageSync connected'),
     );
+  });
+
+  test('forwards relay errors as error log events', () async {
+    final harness = _Harness(pairing: pairing);
+
+    await harness.controller.start();
+    final transport = harness.transports.single;
+    transport.receive({
+      'v': 1,
+      'kind': 'error',
+      'code': 'auth_failed',
+      'message': 'Invalid proof.',
+    });
+    await _drain();
+
+    expect(
+      harness.emitted,
+      contains(
+        equals({
+          'kind': 'log',
+          'message': 'Relay error [auth_failed]: Invalid proof.',
+          'error': true,
+        }),
+      ),
+    );
+    expect(harness.emitted.last, {'kind': 'status', 'status': 'offline'});
   });
 
   test('receives laptop payloads and forwards the result', () async {
@@ -67,16 +105,14 @@ void main() {
     );
 
     expect(harness.clipboard.texts, ['hello from laptop']);
-    expect(
-      harness.emitted,
-      contains(
-        equals({
-          'kind': 'receive',
-          'received': true,
-          'message': 'Text copied from laptop.',
-        }),
-      ),
+    final receiveEvent = harness.emitted.firstWhere(
+      (message) => message['kind'] == 'receive',
     );
+    expect(receiveEvent['received'], isTrue);
+    expect(receiveEvent['message'], 'Text copied from laptop.');
+    expect(receiveEvent['type'], 'text');
+    expect(receiveEvent['origin'], 'laptop');
+    expect(receiveEvent['size'], greaterThan(0));
   });
 
   test('drops frames the phone itself published', () async {

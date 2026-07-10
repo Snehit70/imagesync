@@ -232,7 +232,7 @@ void main() {
         receivedTextRepository: ReceivedTextRepository(storage),
         receivedImageRepository: imageRepository(storage),
       ),
-      onResult: (result) {
+      onResult: (frame, result) {
         results.add(result);
         resultCompleter.complete();
       },

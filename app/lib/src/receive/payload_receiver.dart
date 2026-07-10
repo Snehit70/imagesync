@@ -239,7 +239,8 @@ class PayloadReceiveController {
   final Stream<PayloadFrame> frames;
   final String pairingSecret;
   final PayloadReceiver receiver;
-  final void Function(PayloadReceiveResult result)? onResult;
+  final void Function(PayloadFrame frame, PayloadReceiveResult result)?
+  onResult;
   StreamSubscription<PayloadFrame>? _subscription;
 
   void start() {
@@ -257,6 +258,6 @@ class PayloadReceiveController {
       frame: frame,
       pairingSecret: pairingSecret,
     );
-    onResult?.call(result);
+    onResult?.call(frame, result);
   }
 }

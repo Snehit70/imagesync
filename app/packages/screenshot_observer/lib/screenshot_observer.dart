@@ -81,6 +81,13 @@ abstract interface class ScreenshotWatcher {
   /// Stops watching and releases the observer thread. A no-op if not watching.
   Future<void> stop();
 
+  /// Reads the full bytes of a MediaStore image row (push spec §2). Dart
+  /// cannot open `content://` URIs, so the read happens native-side, off the
+  /// main thread. A single attempt: throws a [PlatformException] with code
+  /// `not-found` (row/file gone or MediaStore still settling) or `io-error`;
+  /// the caller owns the retry policy.
+  Future<Uint8List> readImage(int id);
+
   /// Detected screenshots, in detection order (spec §3). Consumed by the push
   /// pipeline (#28) in the service isolate.
   Stream<ScreenshotEvent> get events;
@@ -127,6 +134,19 @@ class ChannelScreenshotWatcher implements ScreenshotWatcher {
 
   @override
   Future<void> stop() => _methodChannel.invokeMethod<void>('stop');
+
+  @override
+  Future<Uint8List> readImage(int id) async {
+    // StandardMessageCodec moves the bytes as a ByteArray — one copy, no
+    // base64 inflation (spec §2).
+    final bytes = await _methodChannel.invokeMethod<Uint8List>('readImage', {
+      'id': id,
+    });
+    if (bytes == null) {
+      throw PlatformException(code: 'io-error', message: 'readImage returned null');
+    }
+    return bytes;
+  }
 
   @override
   Stream<ScreenshotEvent> get events => _raw

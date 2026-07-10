@@ -18,6 +18,11 @@ class PayloadCrypto {
 
   final Random _random;
 
+  /// PBKDF2 at 200k iterations per call is pure waste when the pairing secret
+  /// is fixed — cache the derived key per secret (push spec §4). Keyed rather
+  /// than single-slot so a re-pair mid-session can't serve a stale key.
+  final _derivedKeys = <String, Future<SecretKey>>{};
+
   Future<PayloadFrame> encrypt({
     required PayloadMetadata metadata,
     required List<int> plaintext,
@@ -68,11 +73,13 @@ class PayloadCrypto {
     );
   }
 
-  Future<SecretKey> _deriveKey(String pairingSecret) async {
-    return _kdf.deriveKey(
-      secretKey: SecretKey(utf8.encode(pairingSecret)),
-      nonce: _salt,
-    );
+  Future<SecretKey> _deriveKey(String pairingSecret) {
+    return _derivedKeys.putIfAbsent(pairingSecret, () {
+      return _kdf.deriveKey(
+        secretKey: SecretKey(utf8.encode(pairingSecret)),
+        nonce: _salt,
+      );
+    });
   }
 
   List<int> _randomBytes(int length) {

@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:cryptography/cryptography.dart' show Cryptography;
+import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -32,6 +34,9 @@ import 'src/shared/relay_connection.dart';
 typedef RelayConnectionFactory = RelayConnection Function(PairingCode pairing);
 
 void main() {
+  // Delegate AES-GCM/PBKDF2 to platform crypto (push spec §4); the package
+  // silently falls back to pure Dart where the plugin channel is missing.
+  Cryptography.instance = FlutterCryptography.defaultInstance;
   FlutterForegroundTask.initCommunicationPort();
   runApp(
     ImageSyncApp(

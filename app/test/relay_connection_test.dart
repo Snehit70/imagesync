@@ -155,6 +155,75 @@ void main() {
 
     expect((await closedEvent).message, 'Relay socket closed (code: none).');
   });
+
+  test('captures the hello-advertised payload cap', () async {
+    final transport = FakeRelayTransport();
+    final connection = RelayConnection(
+      pairing: const PairingCode(
+        host: '127.0.0.1',
+        port: 17321,
+        secret: 'pairing-secret',
+      ),
+      deviceId: 'phone',
+      transport: transport,
+    );
+
+    expect(connection.maxPayloadBytes, RelayConnection.defaultMaxPayloadBytes);
+
+    await connection.start();
+    transport.receive({
+      'v': 1,
+      'kind': 'hello',
+      'challenge': 'relay-challenge',
+      'maxPayloadBytes': 4096,
+    });
+    // The proof send signals the hello was fully handled.
+    await expectLater(transport.sent, emits(containsPair('kind', 'auth')));
+
+    expect(connection.maxPayloadBytes, 4096);
+  });
+
+  test('surfaces publish acks as a stream of acked ts', () async {
+    final transport = FakeRelayTransport();
+    final connection = RelayConnection(
+      pairing: const PairingCode(
+        host: '127.0.0.1',
+        port: 17321,
+        secret: 'pairing-secret',
+      ),
+      deviceId: 'phone',
+      transport: transport,
+    );
+
+    await connection.start();
+    transport.receive({'v': 1, 'kind': 'ack', 'ts': 1800000200002});
+
+    await expectLater(connection.acks, emits(1800000200002));
+  });
+
+  test('relay errors carry the machine-readable code', () async {
+    final transport = FakeRelayTransport();
+    final connection = RelayConnection(
+      pairing: const PairingCode(
+        host: '127.0.0.1',
+        port: 17321,
+        secret: 'pairing-secret',
+      ),
+      deviceId: 'phone',
+      transport: transport,
+    );
+
+    await connection.start();
+    final errorEvent = connection.events.firstWhere((event) => event.isError);
+    transport.receive({
+      'v': 1,
+      'kind': 'error',
+      'code': 'payload_too_large',
+      'message': 'Payload exceeds 100 bytes.',
+    });
+
+    expect((await errorEvent).code, 'payload_too_large');
+  });
 }
 
 class FakeRelayTransport implements RelayTransport {

@@ -12,10 +12,15 @@ enum ConnectionStatus { searching, connected, offline }
 /// A protocol-level event worth surfacing in the debug log: auth handshake
 /// results, relay errors, socket lifecycle.
 class RelayEvent {
-  const RelayEvent(this.message, {this.isError = false});
+  const RelayEvent(this.message, {this.isError = false, this.code});
 
   final String message;
   final bool isError;
+
+  /// The relay's machine-readable error code (`payload_too_large`,
+  /// `auth_failed`, ...) when this event wraps a relay `error` message;
+  /// null for every other event.
+  final String? code;
 }
 
 abstract interface class RelayTransport {
@@ -91,6 +96,10 @@ class RelayConnection implements RelaySession {
     required this.transport,
   });
 
+  /// Mirrors the relay's `defaultMaxPayloadBytes` (25MiB); the fallback until
+  /// the hello advertises the actual cap.
+  static const defaultMaxPayloadBytes = 25 * 1024 * 1024;
+
   final PairingCode pairing;
   final String deviceId;
   final RelayTransport transport;
@@ -98,7 +107,9 @@ class RelayConnection implements RelaySession {
   final _status = StreamController<ConnectionStatus>.broadcast();
   final _payloads = StreamController<PayloadFrame>.broadcast();
   final _events = StreamController<RelayEvent>.broadcast();
+  final _acks = StreamController<int>.broadcast();
   StreamSubscription<Object?>? _subscription;
+  int? _maxPayloadBytes;
 
   @override
   Stream<ConnectionStatus> get status => _status.stream;
@@ -106,6 +117,15 @@ class RelayConnection implements RelaySession {
   Stream<PayloadFrame> get payloads => _payloads.stream;
 
   Stream<RelayEvent> get events => _events.stream;
+
+  /// Acked `ts` values — the relay answers every accepted publish with
+  /// `{kind: "ack", ts}`; the push pipeline clears its pending slot on these.
+  Stream<int> get acks => _acks.stream;
+
+  /// The cap advertised by the relay hello, measured on the decoded
+  /// ciphertext (plaintext + 16-byte GCM tag); [defaultMaxPayloadBytes]
+  /// until the hello arrives.
+  int get maxPayloadBytes => _maxPayloadBytes ?? defaultMaxPayloadBytes;
 
   @override
   Future<void> start() async {
@@ -152,6 +172,7 @@ class RelayConnection implements RelaySession {
     await _status.close();
     await _payloads.close();
     await _events.close();
+    await _acks.close();
   }
 
   Future<void> _handleMessage(Object? rawMessage) async {
@@ -159,6 +180,8 @@ class RelayConnection implements RelaySession {
     switch (message['kind']) {
       case 'hello':
         final challenge = _stringField(message, 'challenge');
+        final cap = message['maxPayloadBytes'];
+        if (cap is int && cap > 0) _maxPayloadBytes = cap;
         _events.add(const RelayEvent('Challenge received, sending proof.'));
         transport.send({
           'v': 1,
@@ -175,6 +198,9 @@ class RelayConnection implements RelaySession {
         _status.add(ConnectionStatus.connected);
       case 'payload':
         _payloads.add(PayloadFrame.fromJson(message['frame']));
+      case 'ack':
+        final ts = message['ts'];
+        if (ts is int) _acks.add(ts);
       case 'error':
         final code = message['code'];
         final detail = message['message'];
@@ -183,6 +209,7 @@ class RelayConnection implements RelaySession {
             'Relay error${code is String ? ' [$code]' : ''}: '
             '${detail is String ? detail : 'unknown'}',
             isError: true,
+            code: code is String ? code : null,
           ),
         );
         _status.add(ConnectionStatus.offline);

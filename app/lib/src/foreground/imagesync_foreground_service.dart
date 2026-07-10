@@ -1,10 +1,13 @@
 import 'dart:async';
 
+import 'package:cryptography/cryptography.dart' show Cryptography;
+import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:imagesync_clipboard/imagesync_clipboard.dart';
 import 'package:screenshot_observer/screenshot_observer.dart';
 
 import '../pairing/pairing_repository.dart';
+import '../push/screenshot_push_controller.dart';
 import '../receive/payload_receiver.dart';
 import '../receive/received_image_repository.dart';
 import '../receive/received_text_repository.dart';
@@ -23,6 +26,11 @@ const _notificationButtons = [
 
 @pragma('vm:entry-point')
 void startForegroundCallback() {
+  // Native AES-GCM/PBKDF2 in the headless engine too, set explicitly rather
+  // than trusting the Dart plugin registrant to have run in this entrypoint;
+  // the screenshot_encrypted.encryptMs log verifies the native path holds
+  // (push spec §4).
+  Cryptography.instance = FlutterCryptography.defaultInstance;
   FlutterForegroundTask.setTaskHandler(ImageSyncForegroundTaskHandler());
 }
 
@@ -37,10 +45,18 @@ class ImageSyncForegroundTaskHandler extends TaskHandler {
     final settingsRepository = AppSettingsRepository(
       const SecureAppSettingsStorage(),
     );
+    final screenshotWatcher = ChannelScreenshotWatcher();
+    // One crypto for push and receive so the memoized PBKDF2 key is shared.
+    final crypto = PayloadCrypto();
     return ServiceRelayController(
       loadPairing: pairingRepository.load,
       loadSettings: settingsRepository.load,
-      screenshotWatcher: ChannelScreenshotWatcher(),
+      screenshotWatcher: screenshotWatcher,
+      pushController: ScreenshotPushController(
+        readImage: screenshotWatcher.readImage,
+        crypto: crypto,
+        emit: FlutterForegroundTask.sendDataToMain,
+      ),
       screenOnEvents: ScreenOnEvents().events,
       connectionFactory: (pairing) => RelayConnection(
         pairing: pairing,
@@ -48,7 +64,7 @@ class ImageSyncForegroundTaskHandler extends TaskHandler {
         transport: WebSocketRelayTransport.connect(pairing),
       ),
       receiverFactory: (settings) => PayloadReceiver(
-        crypto: PayloadCrypto(),
+        crypto: crypto,
         clipboard: const FlutterAndroidClipboard(),
         imageClipboard: const ChannelAndroidImageClipboard(),
         receivedTextRepository: const ReceivedTextRepository(

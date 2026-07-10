@@ -7,6 +7,7 @@ import 'package:screenshot_observer/screenshot_observer.dart';
 
 import 'package:imagesync/src/foreground/service_relay_controller.dart';
 import 'package:imagesync/src/pairing/pairing_code.dart';
+import 'package:imagesync/src/push/screenshot_push_controller.dart';
 import 'package:imagesync/src/receive/payload_receiver.dart';
 import 'package:imagesync/src/receive/received_image_repository.dart';
 import 'package:imagesync/src/receive/received_text_repository.dart';
@@ -481,6 +482,73 @@ void main() {
       expect(watcher.watching, isTrue);
     });
 
+    test('feeds screenshot events into the push pipeline', () async {
+      final watcher = _FakeScreenshotWatcher();
+      final pushController = ScreenshotPushController(
+        readImage: watcher.readImage,
+        crypto: PayloadCrypto(),
+        emit: (_) {},
+      );
+      final harness = _Harness(
+        pairing: pairing,
+        screenshotWatcher: watcher,
+        pushController: pushController,
+      );
+
+      await harness.controller.start();
+      final transport = harness.transports.single;
+      transport.receive({'v': 1, 'kind': 'auth_ok'});
+      await _drain();
+
+      watcher.emitEvent(_screenshotEvent(id: 42));
+      await _waitUntil(
+        () => transport.sent.any((message) => message['kind'] == 'publish'),
+      );
+
+      final frame = transport.sent
+          .firstWhere((message) => message['kind'] == 'publish')['frame']!
+          as Map<String, Object?>;
+      expect(frame['type'], 'image');
+      expect(frame['origin'], 'phone');
+      expect(frame['ts'], 1783608202412);
+    });
+
+    test('toggle off clears the pending pushed frame', () async {
+      final watcher = _FakeScreenshotWatcher();
+      final pushLogs = <Map<String, Object?>>[];
+      final pushController = ScreenshotPushController(
+        readImage: watcher.readImage,
+        crypto: PayloadCrypto(),
+        emit: pushLogs.add,
+      );
+      final harness = _Harness(
+        pairing: pairing,
+        screenshotWatcher: watcher,
+        pushController: pushController,
+      );
+
+      // Offline session: the frame is encrypted and held.
+      await harness.controller.start();
+      watcher.emitEvent(_screenshotEvent(id: 43));
+      await _waitUntil(
+        () => pushLogs.any(
+          (m) => (m['message'] as String).startsWith('screenshot_held'),
+        ),
+      );
+
+      // Toggle flips off, UI sends sync: the hold must be cleared.
+      harness.settings = const AppSettings(autoPushScreenshots: false);
+      await harness.controller.handleTaskData(const {'kind': 'sync'});
+      harness.transports.last.receive({'v': 1, 'kind': 'auth_ok'});
+      await _drain();
+
+      expect(
+        harness.transports.last.sent
+            .where((message) => message['kind'] == 'publish'),
+        isEmpty,
+      );
+    });
+
     test('stop tears the watcher down', () async {
       final watcher = _FakeScreenshotWatcher();
       final harness = _Harness(pairing: pairing, screenshotWatcher: watcher);
@@ -529,10 +597,12 @@ class _Harness {
     List<Duration> reconnectBackoff = const [Duration(minutes: 5)],
     this.settings = const AppSettings(),
     this.screenshotWatcher,
+    ScreenshotPushController? pushController,
   }) {
     controller = ServiceRelayController(
       reconnectBackoff: reconnectBackoff,
       screenshotWatcher: screenshotWatcher,
+      pushController: pushController,
       screenOnEvents: screenOn.stream,
       loadPairing: () async => pairing,
       loadSettings: () async => settings,
@@ -579,6 +649,7 @@ class _Harness {
 
 class _FakeTransport implements RelayTransport {
   final _messages = StreamController<Object?>.broadcast();
+  final sent = <Map<String, Object?>>[];
   bool closed = false;
 
   @override
@@ -597,7 +668,9 @@ class _FakeTransport implements RelayTransport {
   Stream<Object?> get messages => _messages.stream;
 
   @override
-  void send(Map<String, Object?> message) {}
+  void send(Map<String, Object?> message) {
+    sent.add(message);
+  }
 
   @override
   Future<void> close() async {
@@ -664,6 +737,10 @@ class _FakeScreenshotWatcher implements ScreenshotWatcher {
     stops++;
     watching = false;
   }
+
+  @override
+  Future<Uint8List> readImage(int id) async =>
+      Uint8List.fromList(List.filled(64, id % 256));
 
   @override
   Stream<ScreenshotEvent> get events => _events.stream;

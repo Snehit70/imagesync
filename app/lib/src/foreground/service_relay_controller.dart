@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:screenshot_observer/screenshot_observer.dart';
 
 import '../pairing/pairing_code.dart';
+import '../push/screenshot_push_controller.dart';
 import '../receive/payload_receiver.dart';
 import '../settings/app_settings.dart';
 import '../shared/relay_connection.dart';
@@ -49,6 +50,7 @@ class ServiceRelayController {
     required this.emit,
     required this.updateNotification,
     this.screenshotWatcher,
+    this.pushController,
     this.screenOnEvents,
     this.deviceId = 'phone',
     this.reconnectBackoff = defaultReconnectBackoff,
@@ -67,6 +69,11 @@ class ServiceRelayController {
   /// pauses otherwise. Its lifetime spans reconnects — only [stop] tears it
   /// down. Screenshots it emits are the push pipeline's input (#28).
   final ScreenshotWatcher? screenshotWatcher;
+
+  /// The auto-push pipeline (#28). Long-lived across reconnects: [_sync]
+  /// re-attaches it to each fresh connection and [_teardown] detaches it, so
+  /// its pending frame survives every connection swap (the offline hold).
+  final ScreenshotPushController? pushController;
 
   /// Screen-on broadcasts from the native side (keepalive spec D5). An event
   /// while disconnected resets the backoff and reconnects immediately — the
@@ -139,6 +146,9 @@ class ServiceRelayController {
     _log('Connecting to relay at ${pairing.host}:${pairing.port}.');
     final connection = connectionFactory(pairing);
     _connection = connection;
+    // Attach before start() so the pipeline sees this session's `connected`
+    // transition and republishes any frame held while offline.
+    pushController?.attachSession(connection, pairingSecret: pairing.secret);
     _statusSubscription = connection.status.listen((status) {
       if (status == ConnectionStatus.connected) {
         _reconnectAttempt = 0;
@@ -193,6 +203,9 @@ class ServiceRelayController {
 
     if (!settings.autoPushScreenshots) {
       await _stopScreenshotWatcher();
+      // Toggle off clears the hold too (§7): a held frame must not surface
+      // minutes later when the user has said stop.
+      pushController?.clearPending();
       _setScreenshotPaused(false);
       return;
     }
@@ -252,13 +265,14 @@ class ServiceRelayController {
   }
 
   /// Logs the "event emitted" stage (§7) — the observer spec's scope ends at a
-  /// screenshot delivered to this isolate. The push pipeline (#28) hangs off
-  /// this callback.
+  /// screenshot delivered to this isolate — then hands the event to the push
+  /// pipeline (#28).
   void _onScreenshotEvent(ScreenshotEvent event) {
     _log(
       'Screenshot emitted: id=${event.id} name=${event.displayName} '
       'size=${event.sizeBytes} detectedAt=${event.detectedAtEpochMillis}',
     );
+    pushController?.handleEvent(event);
   }
 
   void _setScreenshotPaused(bool paused, {ScreenshotAccessLevel? access}) {
@@ -297,6 +311,7 @@ class ServiceRelayController {
   Future<void> _teardown() async {
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    pushController?.detachSession();
     await _statusSubscription?.cancel();
     _statusSubscription = null;
     await _eventSubscription?.cancel();

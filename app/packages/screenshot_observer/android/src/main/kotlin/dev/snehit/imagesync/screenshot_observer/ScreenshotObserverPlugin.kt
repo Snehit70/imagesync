@@ -69,6 +69,19 @@ class ScreenshotObserverPlugin :
                 result.success(null)
             }
             "accessLevel" -> result.success(ScreenshotWatcher.accessLevel(context))
+            "readImage" -> {
+                val id = call.argument<Number>("id")?.toLong()
+                if (id == null) {
+                    result.error("bad-args", "id is required", null)
+                } else {
+                    ScreenshotWatcher.readImage(
+                        context,
+                        id,
+                        onSuccess = { result.success(it) },
+                        onError = { code, message -> result.error(code, message, null) },
+                    )
+                }
+            }
             else -> result.notImplemented()
         }
     }
@@ -102,6 +115,7 @@ object ScreenshotWatcher {
     private var appContext: Context? = null
     private var handlerThread: HandlerThread? = null
     private var bgHandler: Handler? = null
+    private var readerHandler: Handler? = null
     private var observer: ContentObserver? = null
     private var startWatermarkSeconds = 0L
     private var debounceRunnable: Runnable? = null
@@ -276,6 +290,52 @@ object ScreenshotWatcher {
                 }
             }
         }
+    }
+
+    /**
+     * Reads a MediaStore image row's bytes off the platform thread (spec §2).
+     * Runs on the observer's [HandlerThread] when watching; otherwise on a
+     * lazily created reader thread, so the share-less readImage path (retries
+     * after a stop, tests) still never blocks the main looper. Dart owns the
+     * retry policy; this is a single attempt.
+     */
+    fun readImage(
+        context: Context,
+        id: Long,
+        onSuccess: (ByteArray) -> Unit,
+        onError: (code: String, message: String?) -> Unit,
+    ) {
+        val app = context.applicationContext
+        readHandler().post {
+            try {
+                val uri = ContentUris.withAppendedId(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    id,
+                )
+                val stream = app.contentResolver.openInputStream(uri)
+                if (stream == null) {
+                    mainHandler.post { onError("not-found", "No stream for $uri") }
+                } else {
+                    val bytes = stream.use { it.readBytes() }
+                    mainHandler.post { onSuccess(bytes) }
+                }
+            } catch (e: java.io.FileNotFoundException) {
+                mainHandler.post { onError("not-found", e.message) }
+            } catch (e: Exception) {
+                // IOException, SecurityException, dead row: all read failures
+                // Dart may retry once MediaStore settles.
+                mainHandler.post { onError("io-error", e.message) }
+            }
+        }
+    }
+
+    @Synchronized
+    private fun readHandler(): Handler {
+        bgHandler?.let { return it }
+        val existing = readerHandler
+        if (existing != null) return existing
+        val thread = HandlerThread("imagesync-screenshot-reader").apply { start() }
+        return Handler(thread.looper).also { readerHandler = it }
     }
 
     fun accessLevel(context: Context): String {

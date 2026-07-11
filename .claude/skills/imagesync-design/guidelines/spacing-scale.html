@@ -1,0 +1,30 @@
+<!-- @dsCard group="Spacing" viewport="700x180" name="Spacing scale" subtitle="Values as used: 20px screen padding, 12–14px gaps" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+body { margin: 0; padding: 18px; background: #fff; font-family: var(--font-sans); color: var(--ink); }
+.row { display: flex; align-items: flex-end; gap: 14px; }
+.item { display: grid; gap: 6px; justify-items: center; }
+.bar { background: var(--petal); border-radius: 4px; width: 28px; }
+.l { font-size: 11px; font-weight: 600; color: var(--muted); }
+.use { margin-top: 14px; font-size: 12px; font-weight: 500; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="item"><div class="bar" style="height: 4px;"></div><span class="l">4</span></div>
+  <div class="item"><div class="bar" style="height: 8px;"></div><span class="l">8</span></div>
+  <div class="item"><div class="bar" style="height: 10px;"></div><span class="l">10</span></div>
+  <div class="item"><div class="bar" style="height: 12px;"></div><span class="l">12</span></div>
+  <div class="item"><div class="bar" style="height: 14px; background: var(--raspberry);"></div><span class="l">14</span></div>
+  <div class="item"><div class="bar" style="height: 16px;"></div><span class="l">16</span></div>
+  <div class="item"><div class="bar" style="height: 20px; background: var(--raspberry);"></div><span class="l">20</span></div>
+  <div class="item"><div class="bar" style="height: 24px;"></div><span class="l">24</span></div>
+  <div class="item"><div class="bar" style="height: 28px;"></div><span class="l">28</span></div>
+</div>
+<div class="use">20 = screen list padding · 24 = onboarding padding · 14 = gap between settings cards · 12 = form field gap</div>
+</body>
+</html>

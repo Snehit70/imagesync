@@ -1,0 +1,98 @@
+<!-- @dsCard group="Android App" viewport="440x844" name="ImageSync app" subtitle="Interactive click-through: onboarding, pairing, settings, debug" -->
+<!-- @startingPoint section="Android App" subtitle="Full app recreation — onboarding through settings" viewport="440x844" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ImageSync Android UI Kit</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; background: var(--mist); min-height: 100vh; display: grid; place-items: center; padding: 24px; box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" src="AppChrome.jsx"></script>
+<script type="text/babel" src="OnboardingScreens.jsx"></script>
+<script type="text/babel" src="AppScreens.jsx"></script>
+<script type="text/babel">
+function App() {
+  // screen: onboarding | home | settings | checklist | send | debug
+  const [screen, setScreen] = React.useState("onboarding");
+  const [paired, setPaired] = React.useState(false);
+  const [shareStatus, setShareStatus] = React.useState(null);
+
+  const nav = {
+    onOpenSettings: () => setScreen("settings"),
+    onOpenDebug: () => setScreen("debug"),
+    onOpenChecklist: () => setScreen("checklist"),
+    onBack: () => setScreen("home"),
+  };
+
+  let body = null;
+  if (screen === "onboarding") {
+    body = <window.OnboardingFlow onFinish={() => { setPaired(true); setShareStatus("Clipboard text (214 chars) sent to laptop."); setScreen("home"); }} />;
+  } else if (screen === "home") {
+    body = (
+      <window.HomeScreen
+        paired={paired}
+        shareStatus={paired ? shareStatus : null}
+        onPair={() => setPaired(true)}
+        onReset={() => { setPaired(false); setShareStatus(null); }}
+        {...nav}
+      />
+    );
+  } else if (screen === "settings") {
+    body = <window.SettingsScreen onBack={nav.onBack} onOpenChecklist={() => setScreen("checklist")} issueCount={paired ? 0 : 1} />;
+  } else if (screen === "checklist") {
+    body = <window.SetupChecklistScreen onBack={nav.onBack} allOk={paired} />;
+  } else if (screen === "send") {
+    body = <window.SendClipboardScreen onBack={nav.onBack} />;
+  } else if (screen === "debug") {
+    body = <window.DebugLogScreen onBack={nav.onBack} />;
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 14, justifyItems: "center" }}>
+      <div data-screen-label={screen}>
+        <window.PhoneFrame>{body}</window.PhoneFrame>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center", fontFamily: "var(--font-sans)" }}>
+        {[
+          ["onboarding", "Onboarding"],
+          ["home", "Home"],
+          ["settings", "Settings"],
+          ["checklist", "Setup status"],
+          ["send", "Send clipboard"],
+          ["debug", "Debug log"],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setScreen(key)}
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 12,
+              fontWeight: 600,
+              padding: "8px 14px",
+              borderRadius: 999,
+              border: "none",
+              cursor: "pointer",
+              background: screen === key ? "var(--raspberry)" : "var(--ground)",
+              color: screen === key ? "#fff" : "var(--ink)",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

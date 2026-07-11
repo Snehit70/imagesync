@@ -1,0 +1,28 @@
+<!-- @dsCard group="Colors" viewport="700x170" name="Surface stack" subtitle="Hierarchy by surface color, never shadow: white → mist → petal" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+body { margin: 0; padding: 14px; background: var(--ground); font-family: var(--font-sans); color: var(--ink); }
+.page { border: 1px solid var(--hairline); border-radius: 20px; padding: 16px; }
+.card { background: var(--mist); border-radius: 20px; padding: 14px; display: flex; align-items: center; gap: 12px; }
+.chip { background: var(--petal); border-radius: 13px; width: 40px; height: 40px; display: grid; place-items: center; flex-shrink: 0; }
+.chip .material-icons { color: var(--raspberry); font-size: 20px; }
+.t { font-size: 14px; font-weight: 600; }
+.s { font-size: 12px; font-weight: 500; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="card">
+    <div class="chip"><span class="material-icons">dns</span></div>
+    <div>
+      <div class="t">ground → mist → petal</div>
+      <div class="s">Flat surfaces only. Zero shadows, zero elevation, zero borders on cards.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

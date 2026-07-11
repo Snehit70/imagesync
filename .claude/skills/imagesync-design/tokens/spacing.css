@@ -1,0 +1,29 @@
+/* Spacing, radii, and component metrics — exact values from theme.dart + screens. */
+:root {
+  /* Corner radii */
+  --radius-card: 20px;        /* Card, status cards, setup banner */
+  --radius-input: 16px;       /* TextField, ListTile, error box */
+  --radius-icon-button: 14px; /* App-bar icon chips */
+  --radius-tile-icon: 13px;   /* Relay list leading icon */
+  --radius-refresh: 12px;     /* Inline refresh icon button */
+  --radius-pill: 999px;       /* Buttons, chips, snackbar, step dots */
+
+  /* Component metrics */
+  --button-height: 54px;      /* Filled + outlined pill buttons */
+  --button-border: 1.5px;     /* Outlined button petal border */
+  --input-focus-border: 1.6px;
+  --hairline-width: 1px;
+
+  /* Spacing scale (as used in screens) */
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-14: 14px;
+  --space-16: 16px;
+  --space-20: 20px;   /* screen list padding */
+  --space-24: 24px;   /* onboarding screen padding */
+  --space-28: 28px;
+}

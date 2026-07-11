@@ -1,12 +1,21 @@
 import 'package:flutter/material.dart';
 
 import '../design/palette.dart';
+import '../design/widgets.dart';
 import 'debug_log.dart';
 
-class DebugLogScreen extends StatelessWidget {
+class DebugLogScreen extends StatefulWidget {
   const DebugLogScreen({super.key, required this.log});
 
   final DebugLog log;
+
+  @override
+  State<DebugLogScreen> createState() => _DebugLogScreenState();
+}
+
+class _DebugLogScreenState extends State<DebugLogScreen> {
+  /// null = all categories.
+  String? _category;
 
   @override
   Widget build(BuildContext context) {
@@ -24,47 +33,149 @@ class DebugLogScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            onPressed: log.clear,
+            onPressed: widget.log.clear,
           ),
           const SizedBox(width: 12),
         ],
       ),
       body: SafeArea(
         child: ListenableBuilder(
-          listenable: log,
+          listenable: widget.log,
           builder: (context, _) {
-            final entries = log.entries.reversed.toList();
-            if (entries.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: const BoxDecoration(
-                        color: Palette.petal,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.bug_report_outlined,
-                        color: Palette.raspberry,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('No debug events yet.'),
-                  ],
+            final all = widget.log.entries.reversed.toList();
+            final categories = <String>{for (final e in all) e.category };
+            // The active filter may vanish when the log is cleared or trimmed.
+            final active = _category != null && categories.contains(_category)
+                ? _category
+                : null;
+            final entries = active == null
+                ? all
+                : all.where((e) => e.category == active).toList();
+
+            if (all.isEmpty) return const _EmptyState();
+
+            return Column(
+              children: [
+                _CategoryFilter(
+                  categories: categories.toList()..sort(),
+                  selected: active,
+                  onSelect: (value) => setState(() => _category = value),
                 ),
-              );
-            }
-            return ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: entries.length,
-              itemBuilder: (context, index) =>
-                  _DebugLogTile(entry: entries[index]),
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: entries.length,
+                    itemBuilder: (context, index) =>
+                        _DebugLogTile(entry: entries[index]),
+                  ),
+                ),
+              ],
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+class _CategoryFilter extends StatelessWidget {
+  const _CategoryFilter({
+    required this.categories,
+    required this.selected,
+    required this.onSelect,
+  });
+
+  final List<String> categories;
+  final String? selected;
+  final ValueChanged<String?> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        children: [
+          _FilterPill(
+            label: 'All',
+            active: selected == null,
+            onTap: () => onSelect(null),
+          ),
+          for (final category in categories)
+            _FilterPill(
+              label: category,
+              active: selected == category,
+              onTap: () => onSelect(category),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: PressableScale(
+        child: Material(
+          color: active ? Palette.raspberry : Palette.mist,
+          borderRadius: BorderRadius.circular(999),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: active ? Colors.white : Palette.ink,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(
+              color: Palette.petal,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.bug_report_outlined,
+              color: Palette.raspberry,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('No debug events yet.'),
+        ],
       ),
     );
   }

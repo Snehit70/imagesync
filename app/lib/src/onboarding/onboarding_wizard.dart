@@ -70,6 +70,7 @@ class _OnboardingWizardState extends State<OnboardingWizard>
   ScreenshotAccessLevel? _photosAccess;
   bool _photosRequested = false;
   bool _notificationsRequested = false;
+  bool _batteryRequested = false;
   Map<MiuiSetupFlag, bool> _miuiFlags = const {};
 
   final _hostController = TextEditingController();
@@ -186,7 +187,15 @@ class _OnboardingWizardState extends State<OnboardingWizard>
     if (!mounted) return;
     if (await widget.actions.batteryExempt()) {
       if (mounted) _advance();
+    } else {
+      // The system dialog didn't grant it (some OEMs hard-deny): route to
+      // settings, mirroring the notifications step.
+      setState(() => _batteryRequested = true);
     }
+  }
+
+  void _goBack() {
+    if (_index > 0) setState(() => _index -= 1);
   }
 
   Future<void> _discoverRelays() async {
@@ -263,7 +272,31 @@ class _OnboardingWizardState extends State<OnboardingWizard>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _StepDots(count: _steps.length, index: _index),
+              SizedBox(
+                height: 44,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Center(
+                      child: _StepDots(count: _steps.length, index: _index),
+                    ),
+                    if (_index > 0)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: PressableScale(
+                          child: IconButton(
+                            tooltip: 'Back',
+                            icon: const Icon(
+                              Icons.chevron_left,
+                              color: Palette.ink,
+                            ),
+                            onPressed: _goBack,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 24),
               Expanded(
                 child: switch (_step) {
@@ -347,8 +380,10 @@ class _OnboardingWizardState extends State<OnboardingWizard>
           'your laptop. Allow ImageSync to ignore battery optimizations so '
           'payloads arrive even when the screen is off.',
       consequence: 'Sync may pause when the phone sleeps.',
-      primaryLabel: 'Allow',
-      onPrimary: _allowBattery,
+      primaryLabel: _batteryRequested ? 'Open settings' : 'Allow',
+      onPrimary: _batteryRequested
+          ? widget.actions.openAppSettings
+          : _allowBattery,
       onSkip: _advance,
     );
   }

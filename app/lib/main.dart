@@ -7,11 +7,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import 'src/activity/last_activity.dart';
+import 'src/activity/last_activity_repository.dart';
 import 'src/debug/debug_log.dart';
 import 'src/design/palette.dart';
 import 'src/design/theme.dart';
 import 'src/design/widgets.dart';
-import 'src/debug/debug_log_screen.dart';
 import 'src/foreground/foreground_service_client.dart';
 import 'src/foreground/foreground_service_coordinator.dart';
 import 'src/foreground/imagesync_foreground_service.dart';
@@ -29,6 +30,7 @@ import 'src/receive/receive_notification_tap_handler.dart';
 import 'src/receive/received_image_repository.dart';
 import 'src/receive/received_text_repository.dart';
 import 'src/share/share_intake_controller.dart';
+import 'src/share/share_payload.dart';
 import 'src/share/share_publisher.dart';
 import 'src/settings/app_settings.dart';
 import 'src/settings/app_settings_repository.dart';
@@ -48,6 +50,9 @@ void main() {
     ImageSyncApp(
       appSettingsRepository: AppSettingsRepository(
         const SecureAppSettingsStorage(),
+      ),
+      lastActivityRepository: const LastActivityRepository(
+        SecureLastActivityStorage(),
       ),
       foregroundServiceClient: ImageSyncForegroundServiceClient(),
       pairingRepository: PairingRepository(const SecurePairingStorage()),
@@ -72,6 +77,7 @@ class ImageSyncApp extends StatelessWidget {
   const ImageSyncApp({
     super.key,
     required this.appSettingsRepository,
+    required this.lastActivityRepository,
     required this.foregroundServiceClient,
     required this.pairingRepository,
     this.relayConnectionFactory,
@@ -83,6 +89,7 @@ class ImageSyncApp extends StatelessWidget {
   });
 
   final AppSettingsRepository appSettingsRepository;
+  final LastActivityRepository lastActivityRepository;
   final ForegroundServiceClient foregroundServiceClient;
   final PairingRepository pairingRepository;
   final RelayConnectionFactory? relayConnectionFactory;
@@ -117,6 +124,7 @@ class ImageSyncApp extends StatelessWidget {
                   fileReader: const LocalShareFileReader(),
                 ),
               ),
+              lastActivityRepository: lastActivityRepository,
               debugLog: log,
             ),
             settings: settings,
@@ -125,6 +133,7 @@ class ImageSyncApp extends StatelessWidget {
         return MaterialPageRoute(
           builder: (_) => PairingScreen(
             appSettingsRepository: appSettingsRepository,
+            lastActivityRepository: lastActivityRepository,
             foregroundServiceClient: foregroundServiceClient,
             pairingRepository: pairingRepository,
             relayConnectionFactory: connectionFactory,
@@ -153,6 +162,7 @@ class PairingScreen extends StatefulWidget {
   const PairingScreen({
     super.key,
     required this.appSettingsRepository,
+    required this.lastActivityRepository,
     required this.foregroundServiceClient,
     required this.pairingRepository,
     required this.relayConnectionFactory,
@@ -164,6 +174,7 @@ class PairingScreen extends StatefulWidget {
   });
 
   final AppSettingsRepository appSettingsRepository;
+  final LastActivityRepository lastActivityRepository;
   final ForegroundServiceClient foregroundServiceClient;
   final PairingRepository pairingRepository;
   final RelayConnectionFactory relayConnectionFactory;
@@ -193,8 +204,7 @@ class _PairingScreenState extends State<PairingScreen>
       ForegroundServiceCoordinator(widget.foregroundServiceClient);
   ConnectionStatus _connectionStatus = ConnectionStatus.offline;
   String? _error;
-  String? _shareStatus;
-  String? _receiveStatus;
+  LastActivity? _lastActivity;
   bool _loading = true;
   late final DebugLog _debugLog = widget.debugLog ?? sharedDebugLog;
 
@@ -220,7 +230,7 @@ class _PairingScreenState extends State<PairingScreen>
     if (tapHandler != null) {
       tapHandler.onCopied = (message) {
         _debugLog.add('clipboard', message);
-        if (mounted) setState(() => _receiveStatus = message);
+        if (mounted) _showSnack(message);
       };
       unawaited(tapHandler.init());
     }
@@ -265,12 +275,17 @@ class _PairingScreenState extends State<PairingScreen>
       case 'receive':
         final message = data['message'];
         if (message is String) {
+          final failed = data['received'] == false;
           _debugLog.add(
             'receive',
             _describeReceive(data, message),
-            isError: data['received'] == false,
+            isError: failed,
           );
-          setState(() => _receiveStatus = message);
+          if (failed) {
+            _showSnack(message);
+          } else {
+            unawaited(_recordReceived(data, message));
+          }
         }
       case 'log':
         final message = data['message'];
@@ -278,8 +293,64 @@ class _PairingScreenState extends State<PairingScreen>
           _debugLog.add('service', message, isError: data['error'] == true);
         }
       case 'sendClipboard':
-        Navigator.of(context).pushNamed(sendClipboardRoute);
+        unawaited(_openSendClipboard());
     }
+  }
+
+  /// The clipboard-send screen records its own success into the activity
+  /// store; reload it when the route returns so the dashboard reflects it.
+  Future<void> _openSendClipboard() async {
+    await Navigator.of(context).pushNamed(sendClipboardRoute);
+    await _loadLastActivity();
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _loadLastActivity() async {
+    final activity = await widget.lastActivityRepository.load();
+    if (mounted) setState(() => _lastActivity = activity);
+  }
+
+  Future<void> _recordReceived(Map<Object?, Object?> data, String message) {
+    final type = data['type'];
+    final size = data['size'];
+    final origin = data['origin'];
+    final summary = (type is String && size is int)
+        ? '$type (${_formatBytes(size)})'
+        : message;
+    return _record(
+      LastActivity(
+        direction: ActivityDirection.received,
+        summary: summary,
+        counterpart: origin is String ? origin : 'laptop',
+        timestamp: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<void> _recordSent(SharePayload payload) {
+    final summary = switch (payload.type) {
+      SharePayloadType.text => 'text (${payload.text?.length ?? 0} chars)',
+      SharePayloadType.image => 'image',
+    };
+    return _record(
+      LastActivity(
+        direction: ActivityDirection.sent,
+        summary: summary,
+        counterpart: 'laptop',
+        timestamp: DateTime.now(),
+      ),
+    );
+  }
+
+  Future<void> _record(LastActivity activity) async {
+    await widget.lastActivityRepository.record(activity);
+    if (mounted) setState(() => _lastActivity = activity);
   }
 
   String _describeReceive(Map<Object?, Object?> data, String message) {
@@ -312,6 +383,7 @@ class _PairingScreenState extends State<PairingScreen>
     });
     await _syncForegroundService();
     await _startShareIntake();
+    await _loadLastActivity();
     await _refreshSetupStatus();
     if (_setupLoader != null &&
         !(await widget.appSettingsRepository.onboardingComplete())) {
@@ -436,14 +508,15 @@ class _PairingScreenState extends State<PairingScreen>
     }
   }
 
-  Future<void> _resetPairing() async {
+  /// Deletes the saved pairing so the phone forgets the laptop (ADR 0005).
+  /// Triggered from Settings behind a confirmation, never from home.
+  Future<void> _forgetPairing() async {
     await widget.pairingRepository.reset();
     if (!mounted) return;
     setState(() {
       _connectionStatus = ConnectionStatus.offline;
       _pairing = null;
       _error = null;
-      _receiveStatus = null;
       _selectedRelay = null;
     });
     await _syncForegroundService();
@@ -462,20 +535,18 @@ class _PairingScreenState extends State<PairingScreen>
         crypto: PayloadCrypto(),
         fileReader: const LocalShareFileReader(),
       ),
-      onResult: (result) {
+      onResult: (payload, result) {
         _debugLog.add('send', result.message, isError: !result.published);
         if (!mounted) return;
-        setState(() => _shareStatus = result.message);
+        if (result.published) {
+          unawaited(_recordSent(payload));
+        } else {
+          _showSnack(result.message);
+        }
       },
     );
     _shareIntakeController = controller;
     await controller.start();
-  }
-
-  Future<void> _openDebugLog() async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => DebugLogScreen(log: _debugLog)),
-    );
   }
 
   Future<void> _openSettings() async {
@@ -486,6 +557,9 @@ class _PairingScreenState extends State<PairingScreen>
           onChanged: _updateSettings,
           setupLoader: _setupLoader,
           clipboardAutoSendWatcher: ChannelClipboardAutoSendWatcher(),
+          debugLog: _debugLog,
+          paired: _pairing != null,
+          onForgetPairing: _forgetPairing,
         ),
       ),
     );
@@ -524,21 +598,10 @@ class _PairingScreenState extends State<PairingScreen>
         title: const Text('ImageSync'),
         actions: [
           _AppBarAction(
-            tooltip: 'Debug log',
-            icon: Icons.bug_report_outlined,
-            onPressed: _openDebugLog,
-          ),
-          _AppBarAction(
             tooltip: 'Settings',
             icon: Icons.settings_outlined,
             onPressed: _openSettings,
           ),
-          if (paired)
-            _AppBarAction(
-              tooltip: 'Reset pairing',
-              icon: Icons.link_off,
-              onPressed: _resetPairing,
-            ),
           const SizedBox(width: 12),
         ],
       ),
@@ -549,7 +612,14 @@ class _PairingScreenState extends State<PairingScreen>
             _StatusHero(
               label: statusLabel,
               description: paired
-                  ? 'Paired with ${_pairing!.host}:${_pairing!.port}.'
+                  ? switch (_connectionStatus) {
+                      ConnectionStatus.connected =>
+                        'Your laptop and phone share one clipboard.',
+                      ConnectionStatus.searching =>
+                        'Looking for your laptop on the network.',
+                      ConnectionStatus.offline =>
+                        "Can't reach your laptop right now.",
+                    }
                   : 'Pair with the laptop relay to join the clipboard pool.',
               icon: switch (_connectionStatus) {
                 ConnectionStatus.connected => Icons.link,
@@ -559,35 +629,46 @@ class _PairingScreenState extends State<PairingScreen>
               },
               searching: _connectionStatus == ConnectionStatus.searching,
             ).entrance(0),
-            if (_setupStatus?.bannerNeeded(_settings) ?? false) ...[
-              const SizedBox(height: 16),
-              _SetupBanner(
-                label: _setupStatus!.bannerLabel(_settings),
-                onTap: () => unawaited(
-                  _setupStatus!.onboardingComplete
-                      ? _openChecklist()
-                      : _openWizard(),
-                ),
-              ).entrance(1),
-            ],
-            if (_shareStatus != null) ...[
+            if (paired) ...[
+              if (_lastActivity != null) ...[
+                const SizedBox(height: 24),
+                _DashboardRow(
+                  icon: Icons.history,
+                  title: 'Last activity',
+                  subtitle: _lastActivity!.describe(),
+                ).entrance(1),
+              ],
               const SizedBox(height: 12),
-              _ShareStatusCard(message: _shareStatus!).entrance(1),
-            ],
-            if (_receiveStatus != null) ...[
-              const SizedBox(height: 12),
-              _ShareStatusCard(message: _receiveStatus!).entrance(1),
-            ],
-            const SizedBox(height: 28),
-            if (paired)
-              PressableScale(
-                child: FilledButton.icon(
-                  onPressed: _resetPairing,
-                  icon: const Icon(Icons.link_off),
-                  label: const Text('Reset pairing'),
-                ),
-              ).entrance(2)
-            else ...[
+              _DashboardRow(
+                icon: Icons.dns_outlined,
+                title: 'Relay',
+                subtitle: '${_pairing!.host}:${_pairing!.port}',
+              ).entrance(2),
+              if (_setupStatus != null) ...[
+                const SizedBox(height: 12),
+                _SetupHealthRow(
+                  status: _setupStatus!,
+                  settings: _settings,
+                  onTap: () => unawaited(
+                    _setupStatus!.onboardingComplete
+                        ? _openChecklist()
+                        : _openWizard(),
+                  ),
+                ).entrance(3),
+              ],
+            ] else ...[
+              if (_setupStatus?.bannerNeeded(_settings) ?? false) ...[
+                const SizedBox(height: 16),
+                _SetupBanner(
+                  label: _setupStatus!.bannerLabel(_settings),
+                  onTap: () => unawaited(
+                    _setupStatus!.onboardingComplete
+                        ? _openChecklist()
+                        : _openWizard(),
+                  ),
+                ).entrance(1),
+              ],
+              const SizedBox(height: 28),
               if (widget.relayDiscovery != null) ...[
                 NearbyRelaysCard(
                   relays: _nearbyRelays,
@@ -703,45 +784,115 @@ class _StatusHero extends StatelessWidget {
   }
 }
 
-class _ShareStatusCard extends StatelessWidget {
-  const _ShareStatusCard({required this.message});
+/// A flat dashboard row: leading chip icon, title, muted subtitle, optional
+/// trailing chevron when tappable. Emphasis swaps the mist fill for petal to
+/// flag something that wants attention (ADR 0004).
+class _DashboardRow extends StatelessWidget {
+  const _DashboardRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    this.emphasis = false,
+    this.onTap,
+  });
 
-  final String message;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool emphasis;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Palette.mist,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: const BoxDecoration(
-                color: Palette.petal,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.ios_share,
-                size: 18,
-                color: Palette.raspberry,
-              ),
+    final textTheme = Theme.of(context).textTheme;
+    final surface = emphasis ? Palette.petal : Palette.mist;
+    final chip = emphasis ? Palette.ground : Palette.petal;
+
+    final row = Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: chip,
+              borderRadius: BorderRadius.circular(13),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+            child: Icon(icon, size: 20, color: Palette.raspberry),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: textTheme.titleSmall),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: textTheme.bodySmall?.copyWith(color: Palette.muted),
+                ),
+              ],
             ),
+          ),
+          if (onTap != null) ...[
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right, size: 20, color: Palette.raspberry),
           ],
+        ],
+      ),
+    );
+
+    if (onTap == null) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: surface,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: row,
+      );
+    }
+    return PressableScale(
+      child: Material(
+        color: surface,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: row,
         ),
       ),
+    );
+  }
+}
+
+/// The persistent setup-health row on the paired dashboard (ADR 0004):
+/// "All clear" with a check when healthy, "N issues" on petal otherwise.
+class _SetupHealthRow extends StatelessWidget {
+  const _SetupHealthRow({
+    required this.status,
+    required this.settings,
+    required this.onTap,
+  });
+
+  final SetupStatus status;
+  final AppSettings settings;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final issues = status.issueCount;
+    final healthy = issues == 0;
+    return _DashboardRow(
+      icon: healthy ? Icons.check_circle : Icons.tune,
+      title: 'Setup',
+      subtitle: healthy
+          ? 'All clear'
+          : issues == 1
+              ? '1 issue needs attention'
+              : '$issues issues need attention',
+      emphasis: !healthy,
+      onTap: onTap,
     );
   }
 }

@@ -38,3 +38,23 @@ The phone-to-relay path. Because Android forbids background clipboard reads,
 the phone publishes a payload only when the user explicitly shares content
 (e.g. a screenshot) into ImageSync via the Android share sheet.
 _Avoid_: upload, send
+
+**Forget this laptop**:
+The user-facing action that deletes the saved pairing, so the phone no longer
+knows any relay and must re-pair (QR or manual) to sync again. Named for its
+consequence, like Bluetooth "Forget device". Lives only in Settings, behind a
+confirmation (ADR 0005).
+_Avoid_: reset pairing, unpair, disconnect
+
+**Sync with laptop**:
+The master on/off switch in Settings. On keeps the relay link alive for
+clipboard, screenshots, and receive; off disconnects and stops all syncing. It
+is the app's power switch, not a notification preference (ADR 0006).
+_Avoid_: background sync, persistent notification toggle
+
+**Setup status**:
+The persistent checklist of everything that can degrade after pairing
+(notifications, photos access, battery exemption, pairing, Xiaomi switches),
+each row showing live health and a one-tap fix. The designed recovery surface
+for anything skipped in the onboarding wizard.
+_Avoid_: permissions screen, diagnostics

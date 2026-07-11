@@ -13,8 +13,18 @@ export interface ProcessResult {
   stderr: string;
 }
 
+export interface RunOptions {
+  /**
+   * The command forks a daemon that inherits its pipes (wl-copy serving the
+   * selection): resolve on the direct child's exit instead of waiting for
+   * stdout/stderr EOF, which the daemon holds open until the next clipboard
+   * change.
+   */
+  detachOutput?: boolean;
+}
+
 export interface ProcessRunner {
-  run(command: string, args: string[], input?: Uint8Array): Promise<ProcessResult>;
+  run(command: string, args: string[], input?: Uint8Array, options?: RunOptions): Promise<ProcessResult>;
   watch(command: string, args: string[], onChange: () => void | Promise<void>): () => void;
 }
 
@@ -50,8 +60,14 @@ export function createWaylandClipboardAdapter(runner: ProcessRunner = new BunPro
       };
     },
     async write(payload) {
-      const result = await runner.run("wl-copy", ["--type", payload.mime], payload.data);
-      ensureProcessOk(result, `wl-copy --type ${payload.mime}`);
+      const { mime, data } = await normalizeImageToPng(runner, payload);
+      // Without detachOutput this blocks until the NEXT clipboard change —
+      // and everything downstream of the write (the ack to the sender, the
+      // e2eMs measurement) stalls with it.
+      const result = await runner.run("wl-copy", ["--type", mime], data, {
+        detachOutput: true,
+      });
+      ensureProcessOk(result, `wl-copy --type ${mime}`);
     },
     watch(onChange) {
       return runner.watch("wl-paste", ["--watch", "sh", "-c", "printf changed"], onChange);
@@ -59,17 +75,60 @@ export function createWaylandClipboardAdapter(runner: ProcessRunner = new BunPro
   };
 }
 
-class BunProcessRunner implements ProcessRunner {
-  async run(command: string, args: string[], input?: Uint8Array): Promise<ProcessResult> {
+/**
+ * Most Linux apps only paste `image/png`; phone screenshots arrive as
+ * `image/jpeg` (MIUI) or a non-concrete `image/*` (share sheet), which apps
+ * silently refuse. Re-encode through ImageMagick — it sniffs the real format
+ * from the bytes — and offer PNG instead. Any failure (magick not installed,
+ * corrupt data) falls back to writing the original bytes untouched.
+ */
+async function normalizeImageToPng(
+  runner: ProcessRunner,
+  payload: ClipboardPayload,
+): Promise<{ mime: string; data: Uint8Array }> {
+  if (payload.type !== "image" || payload.mime === "image/png") {
+    return { mime: payload.mime, data: payload.data };
+  }
+  try {
+    const converted = await runner.run("magick", ["-", "png:-"], payload.data);
+    if (converted.exitCode === 0 && converted.stdout.length > 0) {
+      return { mime: "image/png", data: converted.stdout };
+    }
+  } catch {
+    // magick missing or unspawnable — degrade to the raw write below.
+  }
+  return { mime: payload.mime, data: payload.data };
+}
+
+export class BunProcessRunner implements ProcessRunner {
+  async run(
+    command: string,
+    args: string[],
+    input?: Uint8Array,
+    options?: RunOptions,
+  ): Promise<ProcessResult> {
     const child = spawn([command, ...args], {
       stdin: input ? "pipe" : "ignore",
-      stdout: "pipe",
+      stdout: options?.detachOutput ? "ignore" : "pipe",
       stderr: "pipe",
     });
 
     if (input && child.stdin) {
       child.stdin.write(input);
       child.stdin.end();
+    }
+
+    if (options?.detachOutput) {
+      const exitCode = await child.exited;
+      if (exitCode === 0) {
+        // Success means the daemon may hold stderr open — drop it unread.
+        void child.stderr.cancel();
+        return { exitCode, stdout: new Uint8Array(), stderr: "" };
+      }
+      // A failing wl-copy exits before forking, so its pipes are closed and
+      // stderr is safe to drain for the error message.
+      const stderr = await new Response(child.stderr).text();
+      return { exitCode, stdout: new Uint8Array(), stderr };
     }
 
     const [stdout, stderr, exitCode] = await Promise.all([

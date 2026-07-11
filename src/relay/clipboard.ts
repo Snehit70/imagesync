@@ -70,7 +70,20 @@ export function createWaylandClipboardAdapter(runner: ProcessRunner = new BunPro
       ensureProcessOk(result, `wl-copy --type ${mime}`);
     },
     watch(onChange) {
-      return runner.watch("wl-paste", ["--watch", "sh", "-c", "printf changed"], onChange);
+      // wl-paste --watch fires once immediately for the selection that already
+      // exists when the relay starts. That startup fire is not a user action:
+      // publishing it re-stamps stale clipboard content with a fresh now()
+      // timestamp, which then supersedes any frame a device held while the
+      // relay was down and makes the pool drop it as stale (offline-hold,
+      // E2E §10). Swallow the first fire; every later one is a real change.
+      let primed = false;
+      return runner.watch("wl-paste", ["--watch", "sh", "-c", "printf changed"], () => {
+        if (!primed) {
+          primed = true;
+          return;
+        }
+        return onChange();
+      });
     },
   };
 }

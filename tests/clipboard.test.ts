@@ -119,7 +119,7 @@ describe("Wayland clipboard adapter", () => {
     });
   });
 
-  test("watches clipboard changes with wl-paste", async () => {
+  test("watches clipboard changes with wl-paste, swallowing the startup fire", async () => {
     const runner = new FakeRunner();
     const clipboard = createWaylandClipboardAdapter(runner);
     let changes = 0;
@@ -127,6 +127,12 @@ describe("Wayland clipboard adapter", () => {
     const stop = clipboard.watch(() => {
       changes += 1;
     });
+    // wl-paste --watch emits once for the pre-existing selection on startup;
+    // that fire must not count as a change.
+    await runner.onWatchChange?.();
+    expect(changes).toBe(0);
+    // Every subsequent fire is a real clipboard change.
+    await runner.onWatchChange?.();
     await runner.onWatchChange?.();
     stop();
 
@@ -136,7 +142,7 @@ describe("Wayland clipboard adapter", () => {
         args: ["--watch", "sh", "-c", "printf changed"],
       },
     ]);
-    expect(changes).toBe(1);
+    expect(changes).toBe(2);
     expect(runner.onWatchChange).toBeUndefined();
   });
 });

@@ -1,0 +1,55 @@
+<!-- @dsCard group="Components" viewport="700x400" name="Core" subtitle="Pill buttons, inputs, cards, switch, snackbar, icon chips" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body { margin: 0; background: var(--ground); padding: 16px; }</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { Button, IconButton, TextField, Card, Switch, Snackbar, PressableScale } = window.ImageSyncDesignSystem_5c35fc;
+
+function Demo() {
+  const [on, setOn] = React.useState(true);
+  const [host, setHost] = React.useState("192.168.1.4");
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <PressableScale><Button icon="link">Pair manually</Button></PressableScale>
+        <PressableScale><Button variant="outlined" icon="qr_code_scanner">Scan QR</Button></PressableScale>
+        <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
+          <Button variant="text" fullWidth={false}>Open settings</Button>
+          <Button variant="text" muted fullWidth={false}>Skip</Button>
+        </div>
+        <TextField label="Relay IP" icon="router" value={host} onChange={setHost} />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <Card padding={14} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>Auto-send screenshots</div>
+          <Switch checked={on} onChange={setOn} />
+        </Card>
+        <Card variant="emphasis" padding="14px 16px" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span className="material-icons" style={{ fontSize: 20, color: "var(--raspberry)" }}>tune</span>
+          <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>Finish setup</div>
+          <span className="material-icons" style={{ fontSize: 20, color: "var(--raspberry)" }}>chevron_right</span>
+        </Card>
+        <div style={{ display: "flex", gap: 8 }}>
+          <IconButton icon="bug_report" title="Debug log" />
+          <IconButton icon="settings" title="Settings" />
+          <IconButton icon="refresh" color="var(--raspberry)" radius={12} title="Search again" />
+        </div>
+        <Snackbar>Clipboard sent to laptop.</Snackbar>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script>
+</body>
+</html>

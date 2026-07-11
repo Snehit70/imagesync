@@ -1,0 +1,26 @@
+<!-- @dsCard group="Motion" viewport="700x180" name="Motion system" subtitle="Spring overshoot · staggered entrances · press squash 0.93" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+body { margin: 0; padding: 18px; background: #fff; font-family: var(--font-sans); color: var(--ink); }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.c { background: var(--mist); border-radius: 16px; padding: 12px 14px; }
+.t { font-size: 13px; font-weight: 700; }
+.v { font-size: 11px; font-weight: 500; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+@keyframes demo-entrance { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+.c { animation: demo-entrance 600ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.c:nth-child(2) { animation-delay: 100ms; }
+.c:nth-child(3) { animation-delay: 200ms; }
+</style>
+</head>
+<body>
+<div class="grid">
+  <div class="c"><div class="t">Spring</div><div class="v">cubic-bezier(0.34, 1.56, 0.64, 1) — the signature overshoot curve</div></div>
+  <div class="c"><div class="t">Entrance</div><div class="v">rise 30px + fade · 600ms · staggered 100ms per sibling (this card!)</div></div>
+  <div class="c"><div class="t">Press</div><div class="v">squash to 0.93 in 120ms, spring back in 300ms · loops: blob 10s, dot 1.4s, rings 2.2s</div></div>
+</div>
+</body>
+</html>

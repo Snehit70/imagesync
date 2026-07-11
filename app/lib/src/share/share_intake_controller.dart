@@ -4,7 +4,10 @@ import 'share_payload.dart';
 import 'share_publisher.dart';
 import 'share_source.dart';
 
-typedef ShareStatusListener = void Function(SharePublishResult result);
+typedef ShareStatusListener = void Function(
+  SharePayload payload,
+  SharePublishResult result,
+);
 
 class ShareIntakeController {
   ShareIntakeController({
@@ -32,7 +35,7 @@ class ShareIntakeController {
 
   Future<void> _publishAll(List<SharePayload> payloads) async {
     for (final payload in payloads) {
-      onResult?.call(await publisher.publish(payload));
+      onResult?.call(payload, await publisher.publish(payload));
     }
   }
 }

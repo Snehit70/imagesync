@@ -109,7 +109,14 @@ class _SetupChecklistScreenState extends State<SetupChecklistScreen>
                   title: 'Paired with laptop',
                   detail: status.paired
                       ? 'Pairing saved.'
-                      : 'Pair from the home screen to start syncing.',
+                      : 'Not paired yet — sync is off.',
+                  actionLabel: status.paired ? null : 'Pair',
+                  onAction: status.paired
+                      ? null
+                      : () async {
+                          // Back out to home, where the pairing form lives.
+                          Navigator.of(context).popUntil((r) => r.isFirst);
+                        },
                 ).entrance(3),
                 if (status.isMiui) ...[
                   const SizedBox(height: 22),

@@ -1,0 +1,27 @@
+/* Flat Raspberry Pink palette — two pinks on pure white, plum ink.
+   Source: app/lib/src/design/palette.dart */
+:root {
+  /* Base palette */
+  --ground: #FFFFFF;      /* scaffold + app bar background */
+  --mist: #FDF0F4;        /* flat surface: cards, inputs, icon-button chips */
+  --petal: #F8D3DE;       /* secondary surface: banners, badges, leading icons */
+  --raspberry: #D9486E;   /* primary: CTAs, active states, accent icons */
+  --ink: #33202B;         /* plum text ink, snackbar background */
+  --muted: #A88794;       /* secondary text, inactive thumbs */
+  --hairline: #F4DBE4;    /* dividers, input borders, unselected track outline */
+  --error: #B3283E;       /* error text + borders */
+
+  /* Semantic aliases */
+  --surface-page: var(--ground);
+  --surface-card: var(--mist);
+  --surface-emphasis: var(--petal);
+  --surface-inverse: var(--ink);
+  --text-body: var(--ink);
+  --text-muted: var(--muted);
+  --text-error: var(--error);
+  --text-on-primary: #FFFFFF;
+  --text-on-inverse: #FFFFFF;
+  --accent: var(--raspberry);
+  --border-hairline: var(--hairline);
+  --border-focus: var(--raspberry);
+}

@@ -1,0 +1,312 @@
+{
+  "plugins": [
+    "react",
+    "import"
+  ],
+  "rules": {
+    "react/forbid-elements": [
+      "warn",
+      {
+        "forbid": []
+      }
+    ],
+    "no-restricted-imports": [
+      "warn",
+      {
+        "patterns": [
+          {
+            "group": [
+              "components/core/**",
+              "components/motion/**",
+              "components/pairing/**",
+              "ui_kits/android/**"
+            ],
+            "message": "Import design-system components from 'index.js', not component internals."
+          }
+        ]
+      }
+    ],
+    "no-restricted-syntax": [
+      "warn",
+      {
+        "selector": "Literal[value=/#[0-9a-fA-F]{3,8}\\b/]",
+        "message": "Raw hex color — use a design-system color token via var()."
+      },
+      {
+        "selector": "Literal[value=/\\b\\d+px\\b/]",
+        "message": "Raw px value — use a design-system spacing token via var()."
+      },
+      {
+        "selector": "Literal[value=/font-family\\s*:\\s*(?!['\\\"]?(?:Plus Jakarta Sans|Material Icons|Material Icons Outlined))/i]",
+        "message": "Font not provided by the design system. Available: Plus Jakarta Sans, Material Icons, Material Icons Outlined."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute > JSXIdentifier[name!=/^(?:variant|children|icon|muted|fullWidth|onClick|disabled|style|key|ref|className|style|children)$/]",
+        "message": "<Button> doesn't accept that prop. Declared props: variant, children, icon, muted, fullWidth, onClick, disabled, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute[name.name='variant'] > Literal[value!=/^(?:filled|outlined|text)$/]",
+        "message": "<Button> variant must be one of 'filled' | 'outlined' | 'text'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Card'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|variant|padding|onClick|style|key|ref|className|style|children)$/]",
+        "message": "<Card> doesn't accept that prop. Declared props: children, variant, padding, onClick, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Card'] > JSXAttribute[name.name='variant'] > Literal[value!=/^(?:default|emphasis)$/]",
+        "message": "<Card> variant must be one of 'default' | 'emphasis'."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Entrance'] > JSXAttribute > JSXIdentifier[name!=/^(?:index|children|style|key|ref|className|style|children)$/]",
+        "message": "<Entrance> doesn't accept that prop. Declared props: index, children, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='IconButton'] > JSXAttribute > JSXIdentifier[name!=/^(?:icon|color|size|radius|title|onClick|style|key|ref|className|style|children)$/]",
+        "message": "<IconButton> doesn't accept that prop. Declared props: icon, color, size, radius, title, onClick, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='ManualPairingForm'] > JSXAttribute > JSXIdentifier[name!=/^(?:host|port|secret|onHostChange|onPortChange|onSecretChange|error|onScanQr|onPair|key|ref|className|style|children)$/]",
+        "message": "<ManualPairingForm> doesn't accept that prop. Declared props: host, port, secret, onHostChange, onPortChange, onSecretChange, error, onScanQr, onPair."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='MIcon'] > JSXAttribute > JSXIdentifier[name!=/^(?:name|size|color|outlined|style|key|ref|className|style|children)$/]",
+        "message": "<MIcon> doesn't accept that prop. Declared props: name, size, color, outlined, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='MorphingBlob'] > JSXAttribute > JSXIdentifier[name!=/^(?:size|color|children|key|ref|className|style|children)$/]",
+        "message": "<MorphingBlob> doesn't accept that prop. Declared props: size, color, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='NearbyRelaysCard'] > JSXAttribute > JSXIdentifier[name!=/^(?:relays|selected|discovering|onRefresh|onSelect|key|ref|className|style|children)$/]",
+        "message": "<NearbyRelaysCard> doesn't accept that prop. Declared props: relays, selected, discovering, onRefresh, onSelect."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='PressableScale'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|style|key|ref|className|style|children)$/]",
+        "message": "<PressableScale> doesn't accept that prop. Declared props: children, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='PulsingDot'] > JSXAttribute > JSXIdentifier[name!=/^(?:color|size|key|ref|className|style|children)$/]",
+        "message": "<PulsingDot> doesn't accept that prop. Declared props: color, size."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='RippleRings'] > JSXAttribute > JSXIdentifier[name!=/^(?:size|color|children|key|ref|className|style|children)$/]",
+        "message": "<RippleRings> doesn't accept that prop. Declared props: size, color, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Snackbar'] > JSXAttribute > JSXIdentifier[name!=/^(?:children|style|key|ref|className|style|children)$/]",
+        "message": "<Snackbar> doesn't accept that prop. Declared props: children, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='Switch'] > JSXAttribute > JSXIdentifier[name!=/^(?:checked|onChange|style|key|ref|className|style|children)$/]",
+        "message": "<Switch> doesn't accept that prop. Declared props: checked, onChange, style."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='TextField'] > JSXAttribute > JSXIdentifier[name!=/^(?:label|icon|value|onChange|type|placeholder|error|style|key|ref|className|style|children)$/]",
+        "message": "<TextField> doesn't accept that prop. Declared props: label, icon, value, onChange, type, placeholder, error, style."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/index.js"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ],
+  "x-omelette": {
+    "components": {
+      "Button": {
+        "replaces": []
+      },
+      "Card": {
+        "replaces": []
+      },
+      "Entrance": {
+        "replaces": []
+      },
+      "IconButton": {
+        "replaces": []
+      },
+      "ManualPairingForm": {
+        "replaces": []
+      },
+      "MIcon": {
+        "replaces": []
+      },
+      "MorphingBlob": {
+        "replaces": []
+      },
+      "NearbyRelaysCard": {
+        "replaces": []
+      },
+      "PressableScale": {
+        "replaces": []
+      },
+      "PulsingDot": {
+        "replaces": []
+      },
+      "RippleRings": {
+        "replaces": []
+      },
+      "Snackbar": {
+        "replaces": []
+      },
+      "Switch": {
+        "replaces": []
+      },
+      "TextField": {
+        "replaces": []
+      }
+    },
+    "tokens": [
+      "--accent",
+      "--border-focus",
+      "--border-hairline",
+      "--button-border",
+      "--button-height",
+      "--dur-blob-morph",
+      "--dur-dot-pulse",
+      "--dur-entrance",
+      "--dur-press-down",
+      "--dur-press-up",
+      "--dur-ripple",
+      "--dur-stagger",
+      "--dur-step-dot",
+      "--ease-out-cubic",
+      "--ease-spring",
+      "--error",
+      "--font-sans",
+      "--ground",
+      "--hairline",
+      "--hairline-width",
+      "--ink",
+      "--input-focus-border",
+      "--mist",
+      "--muted",
+      "--petal",
+      "--press-scale",
+      "--radius-card",
+      "--radius-icon-button",
+      "--radius-input",
+      "--radius-pill",
+      "--radius-refresh",
+      "--radius-tile-icon",
+      "--raspberry",
+      "--space-10",
+      "--space-12",
+      "--space-14",
+      "--space-16",
+      "--space-2",
+      "--space-20",
+      "--space-24",
+      "--space-28",
+      "--space-4",
+      "--space-6",
+      "--space-8",
+      "--surface-card",
+      "--surface-emphasis",
+      "--surface-inverse",
+      "--surface-page",
+      "--text-body",
+      "--text-error",
+      "--text-muted",
+      "--text-on-inverse",
+      "--text-on-primary",
+      "--type-appbar-size",
+      "--type-appbar-tracking",
+      "--type-appbar-weight",
+      "--type-body-lg-size",
+      "--type-body-md-size",
+      "--type-body-sm-size",
+      "--type-button-size",
+      "--type-display-size",
+      "--type-display-tracking",
+      "--type-display-weight",
+      "--type-label-lg-size",
+      "--type-label-md-size",
+      "--type-label-sm-size",
+      "--type-line-height",
+      "--type-title-md-size",
+      "--type-title-sm-size"
+    ],
+    "tokenKinds": {
+      "--ground": "color",
+      "--mist": "color",
+      "--petal": "color",
+      "--raspberry": "color",
+      "--ink": "color",
+      "--muted": "color",
+      "--hairline": "color",
+      "--error": "color",
+      "--surface-page": "color",
+      "--surface-card": "color",
+      "--surface-emphasis": "color",
+      "--surface-inverse": "color",
+      "--text-body": "font",
+      "--text-muted": "font",
+      "--text-error": "font",
+      "--text-on-primary": "font",
+      "--text-on-inverse": "font",
+      "--accent": "color",
+      "--border-hairline": "color",
+      "--border-focus": "color",
+      "--font-sans": "font",
+      "--type-display-size": "font",
+      "--type-display-weight": "font",
+      "--type-display-tracking": "font",
+      "--type-appbar-size": "font",
+      "--type-appbar-weight": "font",
+      "--type-appbar-tracking": "font",
+      "--type-title-md-size": "font",
+      "--type-title-sm-size": "font",
+      "--type-body-lg-size": "font",
+      "--type-body-md-size": "font",
+      "--type-body-sm-size": "font",
+      "--type-label-lg-size": "font",
+      "--type-label-md-size": "font",
+      "--type-label-sm-size": "font",
+      "--type-button-size": "font",
+      "--type-line-height": "font",
+      "--radius-card": "radius",
+      "--radius-input": "radius",
+      "--radius-icon-button": "radius",
+      "--radius-tile-icon": "radius",
+      "--radius-refresh": "radius",
+      "--radius-pill": "radius",
+      "--button-height": "spacing",
+      "--button-border": "spacing",
+      "--input-focus-border": "spacing",
+      "--hairline-width": "spacing",
+      "--space-2": "spacing",
+      "--space-4": "spacing",
+      "--space-6": "spacing",
+      "--space-8": "spacing",
+      "--space-10": "spacing",
+      "--space-12": "spacing",
+      "--space-14": "spacing",
+      "--space-16": "spacing",
+      "--space-20": "spacing",
+      "--space-24": "spacing",
+      "--space-28": "spacing",
+      "--ease-spring": "other",
+      "--ease-out-cubic": "other",
+      "--dur-entrance": "other",
+      "--dur-stagger": "other",
+      "--dur-press-down": "other",
+      "--dur-press-up": "other",
+      "--press-scale": "other",
+      "--dur-dot-pulse": "other",
+      "--dur-ripple": "other",
+      "--dur-blob-morph": "other",
+      "--dur-step-dot": "other"
+    },
+    "fontFamilies": [
+      "Material Icons",
+      "Material Icons Outlined",
+      "Plus Jakarta Sans"
+    ]
+  }
+}

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:imagesync/main.dart';
+import 'package:imagesync/src/activity/last_activity_repository.dart';
 import 'package:imagesync/src/design/motion.dart';
 import 'package:imagesync/src/foreground/foreground_service_client.dart';
 import 'package:imagesync/src/pairing/pairing_code.dart';
@@ -25,6 +26,9 @@ void main() {
         appSettingsRepository: AppSettingsRepository(
           MemoryAppSettingsStorage(),
         ),
+        lastActivityRepository: LastActivityRepository(
+          MemoryLastActivityStorage(),
+        ),
         foregroundServiceClient: FakeForegroundServiceClient(),
         pairingRepository: PairingRepository(MemoryPairingStorage()),
         relayConnectionFactory: fakeConnection,
@@ -43,6 +47,9 @@ void main() {
       ImageSyncApp(
         appSettingsRepository: AppSettingsRepository(
           MemoryAppSettingsStorage(),
+        ),
+        lastActivityRepository: LastActivityRepository(
+          MemoryLastActivityStorage(),
         ),
         foregroundServiceClient: FakeForegroundServiceClient(),
         pairingRepository: PairingRepository(MemoryPairingStorage()),
@@ -80,6 +87,9 @@ void main() {
         appSettingsRepository: AppSettingsRepository(
           MemoryAppSettingsStorage(),
         ),
+        lastActivityRepository: LastActivityRepository(
+          MemoryLastActivityStorage(),
+        ),
         foregroundServiceClient: FakeForegroundServiceClient(),
         pairingRepository: PairingRepository(storage),
         relayConnectionFactory: fakeConnection,
@@ -98,6 +108,9 @@ void main() {
       ImageSyncApp(
         appSettingsRepository: AppSettingsRepository(
           MemoryAppSettingsStorage(),
+        ),
+        lastActivityRepository: LastActivityRepository(
+          MemoryLastActivityStorage(),
         ),
         foregroundServiceClient: FakeForegroundServiceClient(),
         pairingRepository: PairingRepository(MemoryPairingStorage()),
@@ -146,6 +159,9 @@ void main() {
         appSettingsRepository: AppSettingsRepository(
           MemoryAppSettingsStorage(),
         ),
+        lastActivityRepository: LastActivityRepository(
+          MemoryLastActivityStorage(),
+        ),
         foregroundServiceClient: FakeForegroundServiceClient(),
         pairingRepository: PairingRepository(MemoryPairingStorage()),
         relayConnectionFactory: fakeConnection,
@@ -167,6 +183,9 @@ void main() {
     await tester.pumpWidget(
       ImageSyncApp(
         appSettingsRepository: AppSettingsRepository(settingsStorage),
+        lastActivityRepository: LastActivityRepository(
+          MemoryLastActivityStorage(),
+        ),
         foregroundServiceClient: FakeForegroundServiceClient(),
         pairingRepository: PairingRepository(MemoryPairingStorage()),
         relayConnectionFactory: fakeConnection,
@@ -179,7 +198,7 @@ void main() {
 
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('Notify when laptop payloads arrive'), findsOneWidget);
-    expect(find.text('Background sync'), findsOneWidget);
+    expect(find.text('Sync with laptop'), findsOneWidget);
 
     await tester.tap(
       find.widgetWithText(SwitchListTile, 'Notify when laptop payloads arrive'),
@@ -188,7 +207,7 @@ void main() {
     await tester.tap(
       find.widgetWithText(
         SwitchListTile,
-        'Background sync',
+        'Sync with laptop',
       ),
     );
     await tester.pumpAndSettle();
@@ -203,6 +222,52 @@ void main() {
         showPersistentSendNotification: false,
       ),
     );
+  });
+
+  testWidgets('forget this laptop unpairs only after confirmation', (
+    tester,
+  ) async {
+    final pairingStorage = MemoryPairingStorage();
+    await PairingRepository(pairingStorage).save(
+      const PairingCode(host: '192.168.1.30', port: 17321, secret: 'secret'),
+    );
+
+    await tester.pumpWidget(
+      ImageSyncApp(
+        appSettingsRepository: AppSettingsRepository(MemoryAppSettingsStorage()),
+        lastActivityRepository: LastActivityRepository(
+          MemoryLastActivityStorage(),
+        ),
+        foregroundServiceClient: FakeForegroundServiceClient(),
+        pairingRepository: PairingRepository(pairingStorage),
+        relayConnectionFactory: fakeConnection,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Searching'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Forget this laptop'), 200);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Forget this laptop'));
+    await tester.pumpAndSettle();
+
+    // Dialog is up; cancelling leaves the pairing intact.
+    expect(find.text('Forget this laptop?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(await PairingRepository(pairingStorage).load(), isNotNull);
+
+    // Confirming deletes the pairing and returns home unpaired.
+    await tester.tap(find.text('Forget this laptop'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Forget'));
+    await tester.pumpAndSettle();
+
+    expect(await PairingRepository(pairingStorage).load(), isNull);
+    expect(find.text('Unpaired'), findsOneWidget);
   });
 }
 

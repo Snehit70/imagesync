@@ -1,0 +1,29 @@
+<!-- @dsCard group="Brand" viewport="700x160" name="Iconography" subtitle="Material Icons in rounded chips — raspberry on petal/mist, never bare" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+body { margin: 0; padding: 18px; background: #fff; font-family: var(--font-sans); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.chip { width: 44px; height: 44px; border-radius: 14px; background: var(--mist); display: grid; place-items: center; }
+.chip .material-icons-outlined, .chip .material-icons { font-size: 20px; color: var(--raspberry); }
+.circle { border-radius: 50%; background: var(--petal); }
+.ink .material-icons-outlined { color: var(--ink); }
+.l { font-size: 11px; font-weight: 500; color: var(--muted); width: 100%; }
+</style>
+</head>
+<body>
+<div class="chip"><span class="material-icons">link</span></div>
+<div class="chip"><span class="material-icons">qr_code_scanner</span></div>
+<div class="chip circle"><span class="material-icons">dns</span></div>
+<div class="chip circle"><span class="material-icons">ios_share</span></div>
+<div class="chip ink"><span class="material-icons-outlined">settings</span></div>
+<div class="chip ink"><span class="material-icons-outlined">bug_report</span></div>
+<div class="chip"><span class="material-icons">wifi_find</span></div>
+<div class="chip"><span class="material-icons">check_circle</span></div>
+<div class="chip"><span class="material-icons">tune</span></div>
+<div class="chip"><span class="material-icons">refresh</span></div>
+<div class="l">Material Icons (Flutter Icons.*) · raspberry inside mist/petal chips · ink in app bars · muted for chevrons</div>
+</body>
+</html>

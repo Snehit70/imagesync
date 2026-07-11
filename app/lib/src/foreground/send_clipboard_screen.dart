@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../activity/last_activity.dart';
+import '../activity/last_activity_repository.dart';
 import '../debug/debug_log.dart';
 import '../design/palette.dart';
 import '../design/widgets.dart';
@@ -41,6 +45,7 @@ class SendClipboardScreen extends StatefulWidget {
     required this.clipboardReader,
     required this.publisher,
     this.debugLog,
+    this.lastActivityRepository,
     this.readRetryAttempts = 10,
     this.readRetryDelay = const Duration(milliseconds: 250),
   });
@@ -48,6 +53,7 @@ class SendClipboardScreen extends StatefulWidget {
   final ClipboardReader clipboardReader;
   final ClipboardSharePublisher publisher;
   final DebugLog? debugLog;
+  final LastActivityRepository? lastActivityRepository;
   final int readRetryAttempts;
   final Duration readRetryDelay;
 
@@ -129,11 +135,30 @@ class _SendClipboardScreenState extends State<SendClipboardScreen> {
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleMedium,
               ).entrance(0),
+              if (!_working && !_sent) ...[
+                const SizedBox(height: 24),
+                PressableScale(
+                  child: OutlinedButton.icon(
+                    onPressed: _retry,
+                    icon: const Icon(Icons.refresh, size: 20),
+                    label: const Text('Try again'),
+                  ),
+                ).entrance(1),
+              ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  void _retry() {
+    setState(() {
+      _working = true;
+      _sent = false;
+      _message = 'Reading clipboard...';
+    });
+    unawaited(_sendClipboard());
   }
 
   Future<void> _sendClipboard() async {
@@ -169,6 +194,16 @@ class _SendClipboardScreenState extends State<SendClipboardScreen> {
           : result.message,
       isError: !result.published,
     );
+    if (result.published) {
+      await widget.lastActivityRepository?.record(
+        LastActivity(
+          direction: ActivityDirection.sent,
+          summary: 'text (${text.length} chars)',
+          counterpart: 'laptop',
+          timestamp: DateTime.now(),
+        ),
+      );
+    }
     if (!mounted) return;
     setState(() {
       _working = false;

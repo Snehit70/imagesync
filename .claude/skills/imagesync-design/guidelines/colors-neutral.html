@@ -1,0 +1,23 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Neutrals" subtitle="White ground, plum ink, muted mauve, hairline" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+body { margin: 0; padding: 14px; background: #fff; }
+.row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.sw { border-radius: 16px; height: 92px; padding: 12px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-end; }
+.n { font-size: 13px; font-weight: 700; }
+.v { font-size: 11px; font-weight: 500; opacity: 0.75; }
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="sw" style="background: var(--ground); color: var(--ink); border: 1px solid var(--hairline);"><span class="n">--ground</span><span class="v">#FFFFFF · page</span></div>
+  <div class="sw" style="background: var(--ink); color: #fff;"><span class="n">--ink</span><span class="v">#33202B · text, snackbar</span></div>
+  <div class="sw" style="background: var(--muted); color: #fff;"><span class="n">--muted</span><span class="v">#A88794 · secondary text</span></div>
+  <div class="sw" style="background: var(--hairline); color: var(--ink);"><span class="n">--hairline</span><span class="v">#F4DBE4 · borders</span></div>
+</div>
+</body>
+</html>

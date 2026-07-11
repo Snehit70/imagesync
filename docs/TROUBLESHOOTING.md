@@ -97,6 +97,52 @@ the stale installed copy.
 ~/.local/bin/imagesync-relay` (or the full `bun run install:relay`), *then*
 restart the service.
 
+**Mirror trap (verified 2026-07-11):** `bun run install:relay` alone is not
+enough either — the script ends with `systemctl --user enable --now`, which is
+a no-op when the service is already running, so the old process keeps serving
+the stale binary (check: the PID in `journalctl` output doesn't change). Always
+follow an install with an explicit `systemctl --user restart imagesync-relay`.
+The phone drops with wsCode 1006 and auto-reconnects within the backoff window.
+
+## Laptop: `clipboard_write` logs seconds after the payload arrived, acks stall
+
+**Symptom:** A phone payload reaches the relay instantly (`payload_published`
+with a small `relayLagMs`), but `clipboard_write` logs 10–20s later with a huge
+`e2eMs`, and the phone's `screenshot_acked` shows the same `ackMs`. The
+clipboard content itself is pasteable immediately.
+
+**Cause:** `wl-copy` forks a daemon to serve the selection, and the daemon
+inherits the stdout/stderr pipes. The relay's process runner waited for pipe
+EOF, which only happens when the daemon **loses the selection** — so every
+write resolved on the *next* clipboard change, stalling the ack and poisoning
+the `e2eMs` metric. Reproduced standalone: the same spawn pattern hung 165s
+and resolved the instant another `wl-copy` ran.
+
+**Fix (verified 2026-07-11):** `detachOutput` in `src/relay/clipboard.ts` —
+for `wl-copy` writes, await only the direct child's exit and never the pipes
+(a failing wl-copy exits before forking, so stderr is still readable on
+nonzero exit). Write latency went 165,543ms → 17ms on a 186KB image.
+
+## Laptop: image is on the clipboard but Ctrl+V pastes nothing
+
+**Symptom:** `wl-paste --list-types` shows the phone image arrived (relay
+logged `clipboard_write`), local screenshots paste fine, but Ctrl+V of the
+phone image does nothing in browsers/Electron apps.
+
+**Cause:** Format, not delivery. MIUI screenshots arrive as `image/jpeg` (the
+share-sheet path can even arrive as a non-concrete `image/*`), and most Linux
+apps only accept `image/png` from the clipboard — they see a jpeg-only offer
+and silently decline. Local screenshot tools always offer PNG, which is why
+those paste.
+
+**Fix (verified 2026-07-11):** the relay re-encodes any non-PNG image through
+ImageMagick (`magick - png:-`) before the clipboard write and offers
+`image/png`; `magick` sniffing the real format from the bytes also repairs the
+`image/*` case. Missing/failing `magick` falls back to writing the raw bytes
+(the old behavior). Conversion adds ~1s for a full phone screenshot — budget
+this against the 2s screen-on bar. Requires `ImageMagick` installed on the
+laptop.
+
 ## Laptop: did the payload even arrive? The relay logs nothing
 
 Until the observability work package (WP1, `docs/specs/relay-observability.md`)

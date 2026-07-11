@@ -174,3 +174,37 @@ Interim diagnosis tools:
 - Reconnect cadence monitor: loop `ss` output and log changes (see ticket #26
   resolution for the script).
 - Laptop clipboard content: `wl-paste --list-types` and `wl-paste | head -c 200`.
+
+## Dashboard/relay "bytes" is larger than the text you copied (+17 for text)
+
+**Symptom:** Copy a 62-byte string on the laptop; the phone's Last-activity card
+and the relay's `clipboard_published`/`clipboard_write` logs report **79 B**.
+The offset is a constant **+17** on every text payload (30→47, 50→67, 62→79),
+which first looks like a stale-clipboard read race but is fully deterministic.
+
+**Cause:** Two stacked, benign offsets — nothing is corrupted in transit:
+
+- **+16 — encryption tag.** `encodedPayloadBytes()` (`src/shared/wire.ts`)
+  measures the *ciphertext*: `Buffer.from(frame.payload,"base64").byteLength`.
+  Payloads are AES-GCM encrypted (`src/shared/crypto.ts`), and WebCrypto appends
+  a 16-byte auth tag to the ciphertext. So the metric is wire size, not
+  plaintext size — correct by definition, just not the number the user typed.
+- **+1 — trailing newline.** The relay reads the clipboard with
+  `wl-paste --type <mime>` and **no `-n`** (`src/relay/clipboard.ts:54`), so
+  `wl-paste` appends a `\n`. That newline rides along to the phone: laptop→phone
+  text gains a trailing newline it didn't have on the source.
+
+**Verified 2026-07-11** via the seamless-sync path on-device: three copies at
+30/50/62 B each published exactly +17; the laptop clipboard read back the exact
+original bytes, and a round-tripped screenshot arrived byte-clean (854ms e2e),
+so the payload body is intact.
+
+**Fix (verified 2026-07-11):** the +16 is expected wire overhead and stays.
+The +1 trailing newline was a real fidelity quirk — a copied password/token
+arrived as `token\n` on the phone — fixed by adding `-n` to the `wl-paste
+--type` read in `src/relay/clipboard.ts`, which emits the exact clipboard bytes
+(`-n` is auto-enabled for binary content, so images are unaffected). Confirmed
+empirically that `wl-paste -n` returns the stored bytes verbatim even when the
+content legitimately ends in a newline. Requires a relay rebuild + restart to
+take effect. Not a regression from the home/settings redesign — this was
+long-standing relay behavior.

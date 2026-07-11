@@ -51,7 +51,11 @@ export function createWaylandClipboardAdapter(runner: ProcessRunner = new BunPro
       const selected = supportedMimeTypes.find((candidate) => availableTypes.has(candidate.mime));
       if (!selected) return undefined;
 
-      const read = await runner.run("wl-paste", ["--type", selected.mime]);
+      // -n: emit the exact clipboard bytes. Without it wl-paste appends a
+      // trailing newline to text, which then rides to the phone (a copied
+      // "token" arrives as "token\n"). For non-text types -n is a no-op —
+      // wl-paste auto-enables it for binary content.
+      const read = await runner.run("wl-paste", ["--type", selected.mime, "-n"]);
       ensureProcessOk(read, `wl-paste --type ${selected.mime}`);
       return {
         type: selected.type,

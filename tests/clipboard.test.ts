@@ -109,7 +109,7 @@ describe("Wayland clipboard adapter", () => {
       "wl-paste --list-types",
       new TextEncoder().encode("application/octet-stream\nimage/png\ntext/plain\n"),
     );
-    runner.outputs.set("wl-paste --type image/png", new Uint8Array([137, 80, 78, 71]));
+    runner.outputs.set("wl-paste --type image/png -n", new Uint8Array([137, 80, 78, 71]));
     const clipboard = createWaylandClipboardAdapter(runner);
 
     await expect(clipboard.read()).resolves.toEqual({
@@ -117,6 +117,9 @@ describe("Wayland clipboard adapter", () => {
       mime: "image/png",
       data: new Uint8Array([137, 80, 78, 71]),
     });
+    // The read must pass -n so wl-paste emits exact bytes and never appends a
+    // trailing newline to text payloads.
+    expect(runner.calls.at(-1)?.args).toEqual(["--type", "image/png", "-n"]);
   });
 
   test("watches clipboard changes with wl-paste, swallowing the startup fire", async () => {

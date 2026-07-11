@@ -1,8 +1,24 @@
 # ImageSync
 
-ImageSync is a LAN-only clipboard pool for a Linux/Wayland laptop and an Android phone. The current implementation has the Bun relay slice: encrypted WebSocket protocol, latest-write-wins pool, Wayland clipboard adapter/sync, mDNS advertisement, QR/manual pairing output, structured logs, tests, and a compiled relay binary.
+ImageSync is a LAN-only, end-to-end-encrypted clipboard pool for a Linux/Wayland laptop
+and an Android phone: copy a screenshot or text on one device, paste it on the other a
+second later. Same WiFi only; nothing ever touches the internet.
 
-The Flutter Android app lives in `app/`. Remaining work is tracked on the wayfinder map, GitHub issue #9; the live gap list is `docs/IMPLEMENTATION_STATUS.md`.
+Two components: a **Bun relay** on the laptop (encrypted WebSocket protocol,
+latest-write-wins pool, Wayland clipboard adapter/sync, mDNS advertisement, QR/manual
+pairing, structured logs, compiled binary) and a **Flutter Android app** in `app/`
+(share-sheet push, screenshot auto-push, zero-tap receive, foreground-service connection,
+buttonless status dashboard). Two-direction sync is verified on-device; the live status
+map is `docs/IMPLEMENTATION_STATUS.md` and the wayfinder map is GitHub issue #9.
+
+## Guides
+
+- **[docs/SETUP.md](docs/SETUP.md)** — new-user setup, laptop + phone, end to end.
+- **[docs/USAGE.md](docs/USAGE.md)** — how to use it day to day.
+- **[docs/INSTALL.md](docs/INSTALL.md)** — laptop relay install/service detail.
+- **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** — field-verified fixes.
+
+The rest of this file is the developer-facing quickstart.
 
 ## Relay Prerequisites
 

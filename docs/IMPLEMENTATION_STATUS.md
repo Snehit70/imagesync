@@ -36,16 +36,32 @@ This file is a live gap map against `docs/PRD.md`. It is not a replacement for t
 - Reconnect resilience: the relay heartbeats every connection (ping/pong, `heartbeatIntervalMs`/`staleAfterMs`) and terminates sockets whose peer vanished without a close frame; the Android foreground service reconnects on its own with exponential backoff (2s doubling to 60s, reset on success), and the pool re-send that follows every re-auth is deduplicated by origin+timestamp so reconnects do not re-notify the same payload.
 - Android in-app debug/log view: an in-memory ring buffer (`DebugLog`, 200 entries) in the UI isolate records connection status, auth results (via the `RelayConnection` events stream), payload events with type/size/origin, send outcomes, and errors; the service isolate forwards its events over the task data channel as `{'kind': 'log'}` messages, and a `DebugLogScreen` (bug icon in the app bar) lists them newest-first with a clear action.
 - Flat Raspberry Pink design system applied across all screens: `app/lib/src/design/` holds the palette (raspberry/petal/mist on white, plum ink), Plus Jakarta Sans theme (`google_fonts`, weight-driven 26/16/14/12 scale), spring-motion constants, and the expressive widgets (morphing blob hero, pulsing status dot, ripple-ring success orb, squash-on-press buttons, staggered entrances). Pairing/home, settings, debug log, send-clipboard, and QR screens all use it; looping animations honor `Motion.loopsEnabled` so widget tests settle.
+- Home/Settings UX redesign (ADRs `0004`-`0006`): the paired home is a buttonless status dashboard (Connected ring, Last activity, Relay, Setup), Settings is sectioned around the sync switches, and "Forget this laptop" plus the Debug log now live under Settings. Applied on the Flat Raspberry Pink system.
+- Relay clipboard read emits exact bytes (`wl-paste --type <mime> -n`): laptop→phone text no longer gains a spurious trailing newline. Verified live on-device.
+- New-user setup and day-to-day usage guides: `docs/SETUP.md` (laptop + phone, end to end) and `docs/USAGE.md`.
 - The wayfinder map (issue #9) tracks the route to v1 completion; issues #2-#8 are superseded.
 
-## Implemented, Awaiting On-Phone Verification
+## Verified On-Phone (Seamless Sync E2E)
 
-- The two-direction manual E2E script is written (`docs/E2E.md`) and the environment is staged: relay installed and running as the systemd user service, current debug APK installed on the phone over USB (the earlier `INSTALL_FAILED_USER_RESTRICTED` block is cleared).
+- The two-direction E2E (`docs/E2E.md` §8-§12) has been run on the real phone + laptop
+  over adb, against the relay running as the systemd user service and the redesigned
+  debug APK installed on the device.
+- **§8-§10 green:** laptop→phone text and phone→laptop screenshot round-trip through the
+  redesigned buttonless home/settings UI. Latency well under the 2000ms bar (§9 clipboard
+  median ≈935ms; a screenshot round-trip measured 854ms end-to-end). Pairing persists
+  across app reinstall.
+- The E2E run caught and fixed three real relay bugs (wl-copy pipe stall, JPEG→PNG paste,
+  offline-hold startup re-publish), each with a `docs/TROUBLESHOOTING.md` entry.
 
 ## Not Done
 
-- The E2E script has not yet been run green on the real phone + laptop.
-- Green full D1-D9 completion audit (D2 and D5 hinge on the E2E run; the desk-auditable items — D1, D3, D4, D6, D7, D8, D9 — check out).
+- **§10.3 / §11 / §12 are owner-accepted, not formally run** — the 30-minute screen-off
+  hold, ~5-minute reconnect-at-cap, and 60-minute idle windows are time-gated and were
+  accepted by the owner rather than executed end to end. Do not mark these green without
+  actually running them.
+- Green full D1-D9 completion audit: the desk-auditable items (D1, D3, D4, D6, D7, D8, D9)
+  and the E2E-dependent D2/D5 core-sync behaviour check out; the sign-off is gated only on
+  the time-boxed §11/§12 windows above.
 
 ## Latest Verified Commands
 

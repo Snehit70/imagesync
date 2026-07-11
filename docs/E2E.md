@@ -188,3 +188,4 @@ Phone-side numbers come from the in-app debug log (bug icon in the app bar).
 
 | Date | APK commit | §8 | §9 median ms | §10 | §11 | §12 | Notes |
 |------|-----------|----|--------------|-----|-----|-----|-------|
+| 2026-07-11 | 72885c5 (relay c48036b) | ✅ text | ✅ ~935 | ⏳ | ⏳ | ⏳ | adb-driven partial pass. §8: zero-tap text write `confirmed` (D3), screen off, quiet receipt — image/settings-off/MIUI-blocked variants not re-run. §9: 10-sample median e2eMs 855ms + sinceDetectMs ~80ms ≈ 935ms (≪2000); burst 6→1 supersede on-device; 7-event instrumentation all present; camera/browser filter (§9.5) not run. §10/§11/§12 time- or systemctl-gated, pending. Fixed this session: wl-copy ack stall (17s→17ms) and jpeg→png paste refusal. |

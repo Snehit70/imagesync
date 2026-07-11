@@ -104,6 +104,27 @@ the stale binary (check: the PID in `journalctl` output doesn't change). Always
 follow an install with an explicit `systemctl --user restart imagesync-relay`.
 The phone drops with wsCode 1006 and auto-reconnects within the backoff window.
 
+## Held screenshot lost after the relay restarts (`payload_stale_dropped`)
+
+**Symptom:** Phone holds a screenshot while the relay is down (`screenshot_held`
+logged on the phone). After the relay restarts and the phone reconnects, the
+image never reaches the laptop clipboard; the relay logs `payload_stale_dropped`
+for it with `frameTs < currentTs`, and a `payload_broadcast{replay:true}`
+carrying old content fired just before.
+
+**Cause:** `wl-paste --watch` fires once immediately for the selection that
+already exists at relay startup. The relay treated that startup fire as a real
+change and re-published the current laptop clipboard with a fresh `now()`
+timestamp. That phantom payload is newer than the held frame (stamped at
+capture time during the outage), so the pool's `ts` stale-check drops the held
+frame. Only bites when the relay itself restarts (laptop sleep/wake, crash,
+reboot) — the exact case offline-hold covers.
+
+**Fix (verified 2026-07-11):** the Wayland adapter (`src/relay/clipboard.ts`)
+swallows the first `wl-paste --watch` fire; every later one is a real change.
+Confirmed on-device: restart no longer re-publishes the clipboard, and a
+screenshot held across a full relay stop/start now republishes and lands.
+
 ## Laptop: `clipboard_write` logs seconds after the payload arrived, acks stall
 
 **Symptom:** A phone payload reaches the relay instantly (`payload_published`

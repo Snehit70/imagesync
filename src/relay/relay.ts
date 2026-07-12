@@ -39,6 +39,7 @@ export async function createRelay(options: RelayOptions): Promise<RelayHandle> {
   const pool = options.pool ?? new PayloadPool();
   const logger = options.logger ?? noopLogger;
   const devices = new Set<RelaySocket>();
+  const startedAt = Date.now();
   const heartbeatIntervalMs = options.heartbeatIntervalMs ?? defaultHeartbeatIntervalMs;
   const staleAfterMs = options.staleAfterMs ?? defaultStaleAfterMs;
   const unsubscribe = pool.subscribe((frame, source) => {
@@ -92,6 +93,9 @@ export async function createRelay(options: RelayOptions): Promise<RelayHandle> {
         })
       ) {
         return undefined;
+      }
+      if (new URL(request.url).pathname === "/health") {
+        return Response.json(healthSnapshot(startedAt, devices, pool.current));
       }
       return new Response("ImageSync relay", { status: 200 });
     },
@@ -216,6 +220,37 @@ async function authenticate(
       replay: true,
     });
   }
+}
+
+// The one-curl liveness surface (#36): identity and age only — never payload
+// content, never the pairing secret.
+function healthSnapshot(
+  startedAt: number,
+  devices: Set<RelaySocket>,
+  currentPayload: PayloadFrame | undefined,
+): Record<string, unknown> {
+  const now = Date.now();
+  return {
+    status: "ok",
+    uptimeSeconds: Math.floor((now - startedAt) / 1000),
+    devices: [...devices]
+      .filter((socket) => socket.data.authenticated)
+      .map((socket) => ({
+        deviceId: socket.data.deviceId,
+        remote: socket.data.remote,
+        connectedSeconds: Math.floor((now - socket.data.connectedAt) / 1000),
+        lastSeenSecondsAgo: Math.floor((now - socket.data.lastSeen) / 1000),
+      })),
+    pool: currentPayload
+      ? {
+          type: currentPayload.type,
+          mime: currentPayload.mime,
+          bytes: encodedPayloadBytes(currentPayload),
+          origin: currentPayload.origin,
+          ageSeconds: Math.floor((now - currentPayload.ts) / 1000),
+        }
+      : null,
+  };
 }
 
 function broadcast(devices: Set<RelaySocket>, publisher: unknown, message: RelayMessage): number {

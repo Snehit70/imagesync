@@ -170,6 +170,8 @@ Until the observability work package (WP1, `docs/specs/relay-observability.md`)
 lands, the relay logs nothing after startup — no connect/auth/payload events.
 Interim diagnosis tools:
 
+- One-curl overview: `curl http://localhost:17321/health` — uptime, authenticated
+  devices (with last-seen age), and current pool payload identity/age.
 - Live socket check: `ss -tn state established '( sport = :17321 )'`
 - Reconnect cadence monitor: loop `ss` output and log changes (see ticket #26
   resolution for the script).

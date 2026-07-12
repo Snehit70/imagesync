@@ -101,6 +101,9 @@ Everything else lives behind the **gear icon → Settings**.
 
 ## When something's off
 
+- **Is the relay fine?** One curl from the laptop answers it:
+  `curl http://localhost:17321/health` — uptime, which devices are connected
+  (the phone should be listed), and the age of the current pool payload.
 - **Nothing syncing?** Check both devices are on the same WiFi, and the home screen says
   Connected. Sync resumes on its own when WiFi drops and returns (the phone reconnects
   with backoff).

@@ -1,5 +1,8 @@
 # Vidyut
 
+[![CI](https://github.com/Snehit70/vidyut/actions/workflows/ci.yml/badge.svg)](https://github.com/Snehit70/vidyut/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 Vidyut is a LAN-only, end-to-end-encrypted clipboard pool for a Linux/Wayland laptop
 and an Android phone: copy a screenshot or text on one device, paste it on the other a
 second later. Same WiFi only; nothing ever touches the internet.
@@ -17,6 +20,7 @@ map is `docs/IMPLEMENTATION_STATUS.md` and the wayfinder map is GitHub issue #9.
 - **[docs/USAGE.md](docs/USAGE.md)** — how to use it day to day.
 - **[docs/INSTALL.md](docs/INSTALL.md)** — laptop relay install/service detail.
 - **[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** — field-verified fixes.
+- **[CONTEXT.md](CONTEXT.md)** — glossary/terminology used across the codebase and docs.
 
 The rest of this file is the developer-facing quickstart.
 

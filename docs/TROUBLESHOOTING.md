@@ -208,3 +208,39 @@ empirically that `wl-paste -n` returns the stored bytes verbatim even when the
 content legitimately ends in a newline. Requires a relay rebuild + restart to
 take effect. Not a regression from the home/settings redesign — this was
 long-standing relay behavior.
+
+## Phone: stuck on "Searching" after a laptop reboot — service isolate wedged
+
+**Symptom:** Laptop reboots; relay comes back healthy (auto-started by systemd,
+port listening, mDNS answering). Phone app opened afterwards shows "Searching"
+forever. Every relay `payload_broadcast` logs `recipients:0` and `ss -tn | grep
+17321` shows zero connections on both ends — the phone is not even *attempting*
+to connect. Verified 2026-07-12: app process alive, foreground service alive
+(`dumpsys activity services` shows `isForeground=true`), phone→laptop TCP to
+17321 connects fine from a shell (`nc` exit 0), pairing host/port correct on
+the dashboard — yet the app's Debug log shows **"No debug events yet"**: the
+service isolate emitted nothing (no status, no logs) even after the UI sent it
+the `sync` command on open.
+
+**Cause:** The service isolate's reconnect machinery is wedged in a stuck
+`await`. The exact await wasn't pinned from outside, but the shape is: the
+relay socket died while the process was frozen/mid-reboot, and every recovery
+path (`handleTaskData` sync, screen-on trigger, reconnect timer) funnels
+through `ServiceRelayController._sync()` → `await _teardown()` →
+`RelayConnection.close()`, none of which carry a timeout — one poisoned future
+wedges every subsequent recovery attempt forever. The screen-on fast-path also
+early-returns when `_lastStatus == connected`, so a stale "connected" belief
+disables that rescue too.
+
+**Fix (verified 2026-07-12):** Kill and relaunch the app — the wedged state is
+process-local. Via adb: `adb shell am force-stop
+dev.snehit.imagesync.imagesync && adb shell am start -n
+dev.snehit.imagesync.imagesync/.MainActivity`; on the phone: App info → Force
+stop, then reopen. Reconnection after the fresh start was immediate
+(`device_connected` → `auth_ok` in 132ms, pool replay `recipients:1`, live
+laptop→phone text landed). The Settings "Sync with laptop" off/on toggle is
+NOT a verified recovery — `stopService` may await the same poisoned teardown.
+Durable fix ideas (not yet implemented): timeout-guard `_teardown()`/`close()`,
+add a service-isolate watchdog that forces a fresh `_sync` when disconnected
+too long, and make the screen-on trigger verify the socket instead of trusting
+`_lastStatus`.

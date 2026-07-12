@@ -372,6 +372,143 @@ void main() {
     });
   });
 
+  group('wedge recovery (#35)', () {
+    test('sync proceeds past a transport whose close never completes',
+        () async {
+      final harness = _Harness(
+        pairing: pairing,
+        transportsHangOnClose: true,
+        connectionCloseTimeout: const Duration(milliseconds: 50),
+      );
+
+      await harness.controller.start();
+      harness.transports.single.receive({'v': 1, 'kind': 'auth_ok'});
+      await _drain();
+
+      await harness.controller.handleTaskData(const {'kind': 'sync'});
+
+      expect(harness.transports, hasLength(2));
+      expect(harness.transports.first.closed, isTrue);
+    });
+
+    test('a timed-out sync step retries through the backoff', () async {
+      var settingsLoads = 0;
+      final harness = _Harness(
+        pairing: pairing,
+        reconnectBackoff: const [Duration(milliseconds: 20)],
+        syncStepTimeout: const Duration(milliseconds: 60),
+        loadSettings: () {
+          settingsLoads += 1;
+          if (settingsLoads == 1) return Completer<AppSettings>().future;
+          return Future.value(const AppSettings());
+        },
+      );
+
+      await harness.controller.start();
+      await _waitUntil(() => harness.transports.length == 1);
+
+      expect(
+        harness.emitted,
+        contains(
+          equals({
+            'kind': 'log',
+            'message': 'Sync step timed out (load settings); retrying.',
+            'error': true,
+          }),
+        ),
+      );
+    });
+
+    test('watchdog abandons a stalled sync and reconnects', () async {
+      var settingsLoads = 0;
+      final harness = _Harness(
+        pairing: pairing,
+        watchdogInterval: const Duration(milliseconds: 40),
+        syncStallTimeout: const Duration(milliseconds: 80),
+        // Step bound out of the way: only the stall watchdog may recover.
+        syncStepTimeout: const Duration(minutes: 5),
+        loadSettings: () {
+          settingsLoads += 1;
+          if (settingsLoads == 1) return Completer<AppSettings>().future;
+          return Future.value(const AppSettings());
+        },
+      );
+
+      unawaited(harness.controller.start());
+      await _waitUntil(() => harness.transports.length == 1);
+      harness.transports.single.receive({'v': 1, 'kind': 'auth_ok'});
+      await _drain();
+
+      expect(
+        harness.emitted,
+        contains(
+          equals({
+            'kind': 'log',
+            'message': 'Watchdog: sync stalled; abandoning it and reconnecting.',
+            'error': true,
+          }),
+        ),
+      );
+      expect(
+        harness.emitted,
+        contains(equals({'kind': 'status', 'status': 'connected'})),
+      );
+    });
+
+    test('watchdog stays quiet while unpaired', () async {
+      final harness = _Harness(
+        pairing: null,
+        watchdogInterval: const Duration(milliseconds: 30),
+      );
+
+      await harness.controller.start();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      expect(harness.transports, isEmpty);
+      expect(
+        harness.emitted.where(
+          (message) => message['message'] == 'No pairing stored; staying offline.',
+        ),
+        hasLength(1),
+      );
+      expect(
+        harness.emitted.where(
+          (message) =>
+              message['kind'] == 'log' &&
+              (message['message'] as String).startsWith('Watchdog:'),
+        ),
+        isEmpty,
+      );
+    });
+
+    test('overlapping sync requests coalesce into a follow-up pass', () async {
+      var settingsGate = Completer<AppSettings>();
+      var settingsLoads = 0;
+      final harness = _Harness(
+        pairing: pairing,
+        loadSettings: () {
+          settingsLoads += 1;
+          return settingsGate.future;
+        },
+      );
+
+      final first = harness.controller.start();
+      // Both arrive while the first pass is parked on the settings load.
+      await harness.controller.handleTaskData(const {'kind': 'sync'});
+      await harness.controller.handleTaskData(const {'kind': 'sync'});
+      settingsGate.complete(const AppSettings());
+      settingsGate = Completer<AppSettings>()
+        ..complete(const AppSettings());
+      await first;
+      await _waitUntil(() => harness.transports.length == 2);
+
+      // One in-flight pass plus exactly one coalesced follow-up — not three.
+      expect(settingsLoads, 2);
+      expect(harness.transports.first.closed, isTrue);
+      expect(harness.transports.last.closed, isFalse);
+    });
+  });
+
   group('screenshot watcher', () {
     test('starts the watcher when auto-push is on and access is full', () async {
       final watcher = _FakeScreenshotWatcher();
@@ -792,9 +929,18 @@ class _Harness {
     this.screenshotWatcher,
     this.autoSendWatcher,
     ScreenshotPushController? pushController,
+    Duration syncStepTimeout = defaultSyncStepTimeout,
+    Duration syncStallTimeout = defaultSyncStallTimeout,
+    Duration watchdogInterval = defaultWatchdogInterval,
+    Duration connectionCloseTimeout = RelayConnection.defaultCloseTimeout,
+    bool transportsHangOnClose = false,
+    Future<AppSettings> Function()? loadSettings,
   }) {
     controller = ServiceRelayController(
       reconnectBackoff: reconnectBackoff,
+      syncStepTimeout: syncStepTimeout,
+      syncStallTimeout: syncStallTimeout,
+      watchdogInterval: watchdogInterval,
       screenshotWatcher: screenshotWatcher,
       pushController: pushController,
       clipboardAutoSendWatcher: autoSendWatcher,
@@ -804,14 +950,15 @@ class _Harness {
       },
       screenOnEvents: screenOn.stream,
       loadPairing: () async => pairing,
-      loadSettings: () async => settings,
+      loadSettings: loadSettings ?? () async => settings,
       connectionFactory: (pairing) {
-        final transport = _FakeTransport();
+        final transport = _FakeTransport(hangOnClose: transportsHangOnClose);
         transports.add(transport);
         return RelayConnection(
           pairing: pairing,
           deviceId: 'phone',
           transport: transport,
+          closeTimeout: connectionCloseTimeout,
         );
       },
       receiverFactory: (_) => PayloadReceiver(
@@ -853,6 +1000,12 @@ class _Harness {
 }
 
 class _FakeTransport implements RelayTransport {
+  _FakeTransport({this.hangOnClose = false});
+
+  /// Simulates a half-open socket whose close handshake never completes —
+  /// the post-freeze state behind the 2026-07-12 wedge (#35).
+  final bool hangOnClose;
+
   final _messages = StreamController<Object?>.broadcast();
   final sent = <Map<String, Object?>>[];
   bool closed = false;
@@ -880,6 +1033,7 @@ class _FakeTransport implements RelayTransport {
   @override
   Future<void> close() async {
     closed = true;
+    if (hangOnClose) return Completer<void>().future;
     await _messages.close();
   }
 }

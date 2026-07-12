@@ -94,15 +94,23 @@ class RelayConnection implements RelaySession {
     required this.pairing,
     required this.deviceId,
     required this.transport,
+    this.closeTimeout = defaultCloseTimeout,
   });
 
   /// Mirrors the relay's `defaultMaxPayloadBytes` (25MiB); the fallback until
   /// the hello advertises the actual cap.
   static const defaultMaxPayloadBytes = 25 * 1024 * 1024;
 
+  /// Bounds every await in [close]: a half-open socket (peer vanished during
+  /// a process freeze) can leave cancel/close futures that never complete,
+  /// and one poisoned future must not wedge the controller's teardown — and
+  /// with it every later reconnect — forever (#35).
+  static const defaultCloseTimeout = Duration(seconds: 3);
+
   final PairingCode pairing;
   final String deviceId;
   final RelayTransport transport;
+  final Duration closeTimeout;
 
   final _status = StreamController<ConnectionStatus>.broadcast();
   final _payloads = StreamController<PayloadFrame>.broadcast();
@@ -162,17 +170,23 @@ class RelayConnection implements RelaySession {
 
   @override
   Future<void> close() async {
-    await _subscription?.cancel();
+    await _guardedClose(_subscription?.cancel());
+    await _guardedClose(transport.close());
+    await _guardedClose(_status.close());
+    await _guardedClose(_payloads.close());
+    await _guardedClose(_events.close());
+    await _guardedClose(_acks.close());
+  }
+
+  Future<void> _guardedClose(Future<void>? step) async {
+    if (step == null) return;
     try {
-      await transport.close();
+      await step.timeout(closeTimeout);
     } on Object {
-      // A transport that never finished connecting can throw on close;
-      // the connection is being discarded either way.
+      // A transport that never finished connecting can throw on close, and a
+      // dead one can hang past [closeTimeout]; the connection is being
+      // discarded either way.
     }
-    await _status.close();
-    await _payloads.close();
-    await _events.close();
-    await _acks.close();
   }
 
   Future<void> _handleMessage(Object? rawMessage) async {

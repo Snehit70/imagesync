@@ -40,6 +40,22 @@ const defaultReconnectBackoff = [
   Duration(seconds: 32),
 ];
 
+/// Bounds each preparatory await in the sync pass (teardown, settings and
+/// pairing loads, permission probes): after a process freeze a
+/// platform-channel reply can be dropped outright, leaving a future that
+/// never completes, and an unbounded await there wedges every later recovery
+/// attempt (#35).
+const defaultSyncStepTimeout = Duration(seconds: 10);
+
+/// A sync pass still in flight after this long is presumed wedged on a
+/// poisoned await; the watchdog abandons it and starts a fresh one (#35).
+const defaultSyncStallTimeout = Duration(seconds: 45);
+
+/// Cadence of the service-isolate watchdog — the last-resort recovery lever
+/// for when every event-driven path (backoff timer, screen-on trigger, sync
+/// command) has been lost to a freeze (#35).
+const defaultWatchdogInterval = Duration(minutes: 1);
+
 /// Owns the relay connection inside the foreground service isolate.
 ///
 /// The UI never holds the receive socket: it observes `emit`ed messages
@@ -50,6 +66,12 @@ const defaultReconnectBackoff = [
 /// reconnects on its own with [reconnectBackoff]; a successful connection
 /// resets the backoff. The relay re-sends the current pool payload on every
 /// auth, so the frame last handled is deduplicated across reconnects.
+///
+/// Sync passes are serialized and every await in them is bounded, and a
+/// periodic watchdog abandons a stalled pass and revives a disconnected
+/// controller whose timers were lost — a MIUI process freeze can drop a
+/// platform-channel reply or a socket-death event, and without these guards
+/// one poisoned future wedged reconnection permanently (#35).
 class ServiceRelayController {
   ServiceRelayController({
     required this.loadPairing,
@@ -65,6 +87,9 @@ class ServiceRelayController {
     this.autoSendPublish,
     this.deviceId = 'phone',
     this.reconnectBackoff = defaultReconnectBackoff,
+    this.syncStepTimeout = defaultSyncStepTimeout,
+    this.syncStallTimeout = defaultSyncStallTimeout,
+    this.watchdogInterval = defaultWatchdogInterval,
   });
 
   final ServicePairingLoader loadPairing;
@@ -106,6 +131,9 @@ class ServiceRelayController {
 
   final String deviceId;
   final List<Duration> reconnectBackoff;
+  final Duration syncStepTimeout;
+  final Duration syncStallTimeout;
+  final Duration watchdogInterval;
 
   RelayConnection? _connection;
   PayloadReceiveController? _receiveController;
@@ -124,6 +152,17 @@ class ServiceRelayController {
   Timer? _reconnectTimer;
   int _reconnectAttempt = 0;
   bool _stopped = false;
+  Timer? _watchdogTimer;
+  bool _syncing = false;
+  bool _resyncRequested = false;
+  DateTime? _syncStartedAt;
+  int _syncGeneration = 0;
+
+  /// The last sync pass found no stored pairing. Unpaired-offline is a
+  /// deliberate resting state (recovery is the UI's sync command after a
+  /// save), so the watchdog must not churn syncs — and flood the debug log —
+  /// against it.
+  bool _unpaired = false;
   ({String origin, int ts})? _lastHandledFrame;
 
   /// The exact text last written to the clipboard on behalf of a received
@@ -133,6 +172,9 @@ class ServiceRelayController {
 
   Future<void> start() {
     _screenOnSubscription ??= screenOnEvents?.listen((_) => _onScreenOn());
+    // Armed before the first sync pass so even a wedged initial pass gets
+    // abandoned and retried.
+    _watchdogTimer ??= Timer.periodic(watchdogInterval, (_) => _watchdogTick());
     return _sync();
   }
 
@@ -140,10 +182,49 @@ class ServiceRelayController {
   /// connected, no-op when connected. The debug-log line is the phone-side
   /// timestamp for the ≤2s screen-on → auth_ok measurement (E2E §11).
   void _onScreenOn() {
-    if (_stopped || _lastStatus == ConnectionStatus.connected) return;
+    if (_stopped) return;
+    _abandonStalledSync();
+    if (_lastStatus == ConnectionStatus.connected) return;
     _log('Screen on while disconnected; reconnecting now.');
     _reconnectAttempt = 0;
     unawaited(_sync());
+  }
+
+  void _watchdogTick() {
+    if (_stopped) return;
+    if (_abandonStalledSync()) {
+      _reconnectAttempt = 0;
+      unawaited(_sync());
+      return;
+    }
+    if (_lastStatus != ConnectionStatus.connected &&
+        !_unpaired &&
+        !_syncing &&
+        _reconnectTimer == null) {
+      // Disconnected with nothing scheduled to fix it: every event-driven
+      // recovery path has been lost (e.g. a socket-death event dropped
+      // during a freeze).
+      _log('Watchdog: disconnected with no pending reconnect; reconnecting now.');
+      _reconnectAttempt = 0;
+      unawaited(_sync());
+    }
+  }
+
+  /// Retires a sync pass that has been in flight past [syncStallTimeout], so
+  /// its late completions become no-ops and a fresh pass can take over.
+  /// Returns whether a pass was abandoned.
+  bool _abandonStalledSync() {
+    final startedAt = _syncStartedAt;
+    if (startedAt == null ||
+        DateTime.now().difference(startedAt) <= syncStallTimeout) {
+      return false;
+    }
+    _log('Watchdog: sync stalled; abandoning it and reconnecting.',
+        isError: true);
+    _syncGeneration += 1;
+    _syncing = false;
+    _syncStartedAt = null;
+    return true;
   }
 
   Future<void> handleTaskData(Object? data) async {
@@ -155,6 +236,8 @@ class ServiceRelayController {
 
   Future<void> stop() async {
     _stopped = true;
+    _watchdogTimer?.cancel();
+    _watchdogTimer = null;
     await _screenOnSubscription?.cancel();
     _screenOnSubscription = null;
     await _stopScreenshotWatcher();
@@ -170,17 +253,61 @@ class ServiceRelayController {
   }
 
   Future<void> _sync() async {
-    await _teardown();
+    if (_syncing) {
+      // A pass is already in flight; run another when it finishes so a
+      // just-changed setting or pairing is never missed.
+      _resyncRequested = true;
+      return;
+    }
+    _syncing = true;
+    _syncStartedAt = DateTime.now();
+    final generation = ++_syncGeneration;
+    try {
+      await _syncOnce(generation);
+    } on TimeoutException catch (error) {
+      if (generation != _syncGeneration) return;
+      _log('Sync step timed out (${error.message}); retrying.', isError: true);
+      _scheduleReconnect();
+    } finally {
+      // An abandoned pass (generation retired by the watchdog) must not
+      // clear state the fresh pass now owns.
+      if (generation == _syncGeneration) {
+        _syncing = false;
+        _syncStartedAt = null;
+        if (_resyncRequested) {
+          _resyncRequested = false;
+          unawaited(_sync());
+        }
+      }
+    }
+  }
+
+  /// Bounds a preparatory await in [_syncOnce]; see [syncStepTimeout].
+  Future<T> _bounded<T>(Future<T> step, String label) {
+    return step.timeout(
+      syncStepTimeout,
+      onTimeout: () => throw TimeoutException(label, syncStepTimeout),
+    );
+  }
+
+  Future<void> _syncOnce(int generation) async {
+    await _bounded(_teardown(), 'teardown');
     // The observer's lifetime tracks the setting and photo grant, not the relay
     // connection (§6: always-on while the service runs), so reconcile it before
     // the pairing check — it must keep watching even while unpaired/offline.
-    final settings = await loadSettings();
-    await _reconcileScreenshotWatcher(settings);
-    await _reconcileClipboardAutoSendWatcher(settings);
-    final pairing = await loadPairing();
+    final settings = await _bounded(loadSettings(), 'load settings');
+    if (generation != _syncGeneration) return;
+    await _bounded(_reconcileScreenshotWatcher(settings), 'screenshot watcher');
+    await _bounded(
+      _reconcileClipboardAutoSendWatcher(settings),
+      'auto-send watcher',
+    );
+    final pairing = await _bounded(loadPairing(), 'load pairing');
+    if (generation != _syncGeneration) return;
+    _unpaired = pairing == null;
     if (pairing == null) {
       _log('No pairing stored; staying offline.');
-      await _publishStatus(ConnectionStatus.offline);
+      await _bounded(_publishStatus(ConnectionStatus.offline), 'publish status');
       return;
     }
     _log('Connecting to relay at ${pairing.host}:${pairing.port}.');

@@ -109,6 +109,7 @@ class VidyutApp extends StatelessWidget {
     return MaterialApp(
       title: 'Vidyut',
       theme: buildVidyutTheme(),
+      debugShowCheckedModeBanner: false,
       onGenerateRoute: (settings) {
         final connectionFactory =
             relayConnectionFactory ?? _defaultRelayConnection;

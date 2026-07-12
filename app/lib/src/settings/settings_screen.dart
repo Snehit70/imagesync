@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:clipboard_autosend/clipboard_autosend.dart';
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../debug/debug_log.dart';
 import '../debug/debug_log_screen.dart';
@@ -9,6 +11,7 @@ import '../design/palette.dart';
 import '../design/widgets.dart';
 import '../onboarding/setup_actions.dart';
 import '../onboarding/setup_checklist_screen.dart';
+import '../update/github_update_checker.dart';
 import 'app_settings.dart';
 import 'clipboard_autosend_screen.dart';
 
@@ -24,6 +27,7 @@ class SettingsScreen extends StatefulWidget {
     this.debugLog,
     this.paired = false,
     this.onForgetPairing,
+    this.updateChecker,
   });
 
   final AppSettings settings;
@@ -48,6 +52,10 @@ class SettingsScreen extends StatefulWidget {
   /// Deletes the saved pairing; run behind a confirmation in the danger zone.
   final Future<void> Function()? onForgetPairing;
 
+  /// Backs the About → "Check for updates" row; the row is hidden when null
+  /// (widget tests without network access).
+  final GithubUpdateChecker? updateChecker;
+
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
@@ -55,11 +63,19 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late AppSettings _settings = widget.settings;
   int? _issueCount;
+  String? _appVersion;
+  bool _checkingForUpdates = false;
 
   @override
   void initState() {
     super.initState();
     unawaited(_loadIssueCount());
+    unawaited(_loadAppVersion());
+  }
+
+  Future<void> _loadAppVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) setState(() => _appVersion = info.version);
   }
 
   Future<void> _loadIssueCount() async {
@@ -132,6 +148,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirmed != true) return;
     await onForget();
     if (mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _checkForUpdates() async {
+    final checker = widget.updateChecker;
+    final currentVersion = _appVersion;
+    if (checker == null || currentVersion == null || _checkingForUpdates) return;
+    setState(() => _checkingForUpdates = true);
+    final result = await checker.check(currentVersion);
+    if (!mounted) return;
+    setState(() => _checkingForUpdates = false);
+    await _showUpdateResultDialog(result);
+  }
+
+  Future<void> _showUpdateResultDialog(UpdateCheckResult result) async {
+    final String title;
+    final String message;
+    String? downloadUrl;
+    switch (result) {
+      case UpToDate():
+        title = "You're up to date";
+        message = 'Vidyut $_appVersion is the latest version.';
+      case UpdateAvailable():
+        title = 'Update available';
+        message = result.releaseNotes.trim().isEmpty
+            ? 'Vidyut ${result.version} is available.'
+            : 'Vidyut ${result.version} is available.\n\n${result.releaseNotes.trim()}';
+        downloadUrl = result.downloadUrl;
+      case MissingAsset():
+        title = 'Update available';
+        message =
+            'Vidyut ${result.tagName} is available, but no debug APK was '
+            'attached to the release yet.';
+      case NoReleaseFound():
+        title = 'No releases yet';
+        message = "This app hasn't published a GitHub release yet.";
+      case RateLimited():
+        title = "Can't check right now";
+        message = "GitHub's rate limit was hit. Try again in a few minutes.";
+      case UpdateCheckOffline():
+        title = "Can't check right now";
+        message = 'Vidyut could not reach GitHub. Check your connection and try again.';
+      case MalformedMetadata():
+        title = "Can't check right now";
+        message = 'GitHub returned unexpected release data. Try again later.';
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Palette.ground,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(20)),
+        ),
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: TextButton.styleFrom(foregroundColor: Palette.muted),
+            child: Text(downloadUrl == null ? 'OK' : 'Not now'),
+          ),
+          if (downloadUrl != null)
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                unawaited(launchUrl(Uri.parse(downloadUrl!), mode: LaunchMode.externalApplication));
+              },
+              child: const Text('Download'),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -243,6 +331,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () => unawaited(_openDebugLog()),
               ),
             ).entrance(next()),
+          if (widget.updateChecker != null) ...[
+            const _SectionHeader('About'),
+            Card(
+              child: ListTile(
+                contentPadding: const EdgeInsets.fromLTRB(20, 4, 16, 4),
+                title: const Text('Check for updates'),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _appVersion == null ? 'Loading version…' : 'Version $_appVersion',
+                  ),
+                ),
+                trailing: _checkingForUpdates
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.chevron_right, color: Palette.muted),
+                onTap: _checkingForUpdates ? null : () => unawaited(_checkForUpdates()),
+              ),
+            ).entrance(next()),
+          ],
           if (widget.paired && widget.onForgetPairing != null) ...[
             const _SectionHeader('Danger zone'),
             Card(

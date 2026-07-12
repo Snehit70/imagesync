@@ -38,6 +38,7 @@ import 'src/settings/settings_screen.dart';
 import 'src/share/share_source.dart';
 import 'src/shared/payload_crypto.dart';
 import 'src/shared/relay_connection.dart';
+import 'src/update/github_update_checker.dart';
 
 typedef RelayConnectionFactory = RelayConnection Function(PairingCode pairing);
 
@@ -560,6 +561,7 @@ class _PairingScreenState extends State<PairingScreen>
           debugLog: _debugLog,
           paired: _pairing != null,
           onForgetPairing: _forgetPairing,
+          updateChecker: GithubUpdateChecker(owner: 'Snehit70', repo: 'vidyut'),
         ),
       ),
     );

@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:imagesync_clipboard/imagesync_clipboard.dart';
+import 'package:vidyut_clipboard/vidyut_clipboard.dart';
 
 import '../shared/payload_crypto.dart';
 import '../shared/wire.dart';
@@ -12,15 +12,15 @@ import 'received_image_repository.dart';
 import 'received_text_repository.dart';
 
 /// Notification payload marking "tap to copy the latest received text".
-const copyLatestTextNotificationPayload = 'imagesync.copy-latest-text';
+const copyLatestTextNotificationPayload = 'vidyut.copy-latest-text';
 
 /// Notification payload marking "tap to copy the latest received image".
-const copyLatestImageNotificationPayload = 'imagesync.copy-latest-image';
+const copyLatestImageNotificationPayload = 'vidyut.copy-latest-image';
 
 /// Notification payload marking "open the clipboard permission settings"
 /// (the one-time MIUI hint).
 const openClipboardPermissionNotificationPayload =
-    'imagesync.open-clipboard-permission';
+    'vidyut.open-clipboard-permission';
 
 /// How a direct clipboard write resolved (zero-tap-receive D3).
 enum ClipboardWriteOutcome {
@@ -42,14 +42,14 @@ abstract interface class AndroidClipboard {
   Future<void> writeText(String text);
 }
 
-/// Writes text through the `imagesync/clipboard` channel. The plugin hosts
+/// Writes text through the `vidyut/clipboard` channel. The plugin hosts
 /// the channel from application context, so this works in the UI isolate and
 /// the foreground-service isolate alike (unlike `Clipboard.setData`, whose
 /// Android handler only attaches to activity-backed engines).
 class FlutterAndroidClipboard implements AndroidClipboard {
-  const FlutterAndroidClipboard([this._clipboard = const ImagesyncClipboard()]);
+  const FlutterAndroidClipboard([this._clipboard = const VidyutClipboard()]);
 
-  final ImagesyncClipboard _clipboard;
+  final VidyutClipboard _clipboard;
 
   @override
   Future<void> writeText(String text) => _clipboard.writeText(text);
@@ -59,16 +59,16 @@ abstract interface class AndroidImageClipboard {
   Future<void> writeImage(ReceivedImage image);
 }
 
-/// Writes an image to the Android clipboard through the `imagesync/clipboard`
+/// Writes an image to the Android clipboard through the `vidyut/clipboard`
 /// channel: the Kotlin side wraps the file in a FileProvider content URI and
-/// sets it as ClipData. Hosted by the imagesync_clipboard plugin, so it works
+/// sets it as ClipData. Hosted by the vidyut_clipboard plugin, so it works
 /// from both engines.
 class ChannelAndroidImageClipboard implements AndroidImageClipboard {
   const ChannelAndroidImageClipboard([
-    this._clipboard = const ImagesyncClipboard(),
+    this._clipboard = const VidyutClipboard(),
   ]);
 
-  final ImagesyncClipboard _clipboard;
+  final VidyutClipboard _clipboard;
 
   @override
   Future<void> writeImage(ReceivedImage image) {
@@ -113,12 +113,12 @@ class LocalPayloadNotifier implements PayloadNotifier {
 
   /// Quiet receipts (zero-tap-receive D4): no sound, no heads-up. Channel
   /// importance is fixed at creation, so the quiet behavior needs this new
-  /// channel; the old alerting `imagesync_payloads` channel is deleted on
+  /// channel; the old alerting `vidyut_payloads` channel is deleted on
   /// upgrade in [_ensureInitialized].
   static const _receiptDetails = NotificationDetails(
     android: AndroidNotificationDetails(
-      'imagesync_receipts',
-      'ImageSync receipts',
+      'vidyut_receipts',
+      'Vidyut receipts',
       channelDescription: 'Quiet receipts for payloads received from the laptop',
       importance: Importance.low,
       priority: Priority.low,
@@ -127,8 +127,8 @@ class LocalPayloadNotifier implements PayloadNotifier {
 
   static const _hintDetails = NotificationDetails(
     android: AndroidNotificationDetails(
-      'imagesync_hints',
-      'ImageSync permission hints',
+      'vidyut_hints',
+      'Vidyut permission hints',
       channelDescription:
           'Action-needed hints, e.g. clipboard access blocked by the device',
       importance: Importance.defaultImportance,
@@ -159,7 +159,7 @@ class LocalPayloadNotifier implements PayloadNotifier {
     await _ensureInitialized();
     await _plugin.show(
       id: miuiHintNotificationId,
-      title: 'Allow clipboard access for ImageSync',
+      title: 'Allow clipboard access for Vidyut',
       body:
           'The device blocked a background clipboard write. Tap to open '
           'settings and enable the Clipboard permission.',
@@ -212,7 +212,7 @@ class LocalPayloadNotifier implements PayloadNotifier {
         >();
     // Pre-receipt installs created this high-importance channel; Android
     // won't lower a channel's importance, so it has to go.
-    await android?.deleteNotificationChannel(channelId: 'imagesync_payloads');
+    await android?.deleteNotificationChannel(channelId: 'vidyut_payloads');
     if (requestPermissionOnInit) {
       await android?.requestNotificationsPermission();
     }
@@ -317,13 +317,13 @@ class PayloadReceiver {
     } on MissingPluginException {
       log?.call(
         'Clipboard channel missing in this isolate (MissingPluginException): '
-        'the imagesync_clipboard plugin failed to register. This is a wiring '
+        'the vidyut_clipboard plugin failed to register. This is a wiring '
         'regression, not device policy.',
         isError: true,
       );
       return ClipboardWriteOutcome.wiringBug;
     } on PlatformException catch (error) {
-      if (error.code == ImagesyncClipboard.blockedErrorCode) {
+      if (error.code == VidyutClipboard.blockedErrorCode) {
         log?.call('Clipboard write blocked by the device: ${error.message}');
         return ClipboardWriteOutcome.blocked;
       }

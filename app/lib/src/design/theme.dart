@@ -5,7 +5,7 @@ import 'palette.dart';
 
 /// Flat Raspberry Pink theme: white grounds, flat mist/petal surfaces,
 /// 20px radii, pill buttons, Plus Jakarta Sans with weight-driven hierarchy.
-ThemeData buildImageSyncTheme() {
+ThemeData buildVidyutTheme() {
   const scheme = ColorScheme.light(
     primary: Palette.raspberry,
     onPrimary: Colors.white,

@@ -97,8 +97,8 @@ abstract interface class ScreenshotWatcher {
   Stream<String> get diagnostics;
 }
 
-/// [ScreenshotWatcher] backed by the `imagesync/screenshot_observer` method
-/// channel and the `imagesync/screenshot_events` event channel.
+/// [ScreenshotWatcher] backed by the `vidyut/screenshot_observer` method
+/// channel and the `vidyut/screenshot_events` event channel.
 class ChannelScreenshotWatcher implements ScreenshotWatcher {
   ChannelScreenshotWatcher({
     MethodChannel? methodChannel,
@@ -107,10 +107,10 @@ class ChannelScreenshotWatcher implements ScreenshotWatcher {
        _eventChannel = eventChannel ?? defaultEventChannel;
 
   static const defaultMethodChannel = MethodChannel(
-    'imagesync/screenshot_observer',
+    'vidyut/screenshot_observer',
   );
   static const defaultEventChannel = EventChannel(
-    'imagesync/screenshot_events',
+    'vidyut/screenshot_events',
   );
 
   final MethodChannel _methodChannel;

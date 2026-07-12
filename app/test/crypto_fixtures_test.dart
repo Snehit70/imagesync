@@ -3,9 +3,9 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/shared/pairing_auth.dart';
-import 'package:imagesync/src/shared/payload_crypto.dart';
-import 'package:imagesync/src/shared/wire.dart';
+import 'package:vidyut/src/shared/pairing_auth.dart';
+import 'package:vidyut/src/shared/payload_crypto.dart';
+import 'package:vidyut/src/shared/wire.dart';
 
 /// Replays fixture nonce bytes so encrypt reproduces the vector exactly.
 class FixedRandom implements Random {

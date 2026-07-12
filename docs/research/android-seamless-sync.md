@@ -1,4 +1,4 @@
-# Android platform constraints for seamless ImageSync
+# Android platform constraints for seamless Vidyut
 
 Research date: 2026-07-10. Target device: Xiaomi (MIUI/HyperOS), plus generic Android 13/14/15.
 App shape today: Flutter app, `flutter_foreground_task` 9.2.2 foreground service (`dataSync` type,
@@ -50,7 +50,7 @@ any new image, filter on `RELATIVE_PATH LIKE '%Screenshots%'` or `DISPLAY_NAME` 
   granted access is partial or full") — the **system silently filters** rows to the selected set. So
   your observer still fires on the URI notification, but the follow-up `query(... id ...)` returns an
   empty cursor for an unselected new screenshot, and you get nothing to read.
-- **Consequence for ImageSync:** you must obtain the **full** `READ_MEDIA_IMAGES` grant. If the app
+- **Consequence for Vidyut:** you must obtain the **full** `READ_MEDIA_IMAGES` grant. If the app
   targets SDK 34+ and declares `READ_MEDIA_VISUAL_USER_SELECTED`, the permission sheet offers the user
   "Select photos" — which is the wrong outcome here. `photo_manager`'s `PermissionDelegate34` requests
   `READ_MEDIA_VISUAL_USER_SELECTED` (photo_manager .../permission/impl/PermissionDelegate34.kt:21), so
@@ -65,7 +65,7 @@ any new image, filter on `RELATIVE_PATH LIKE '%Screenshots%'` or `DISPLAY_NAME` 
 a per-activity basis", registered in `onStart()`/unregistered in `onStop()`, and fires only "when the
 user takes a screenshot **while that activity is visible**." It also "doesn't provide an image of the
 actual screenshot." Source: developer.android.com/about/versions/14/features/screenshot-detection.
-Because ImageSync has no visible activity when the user screenshots another app, and gets no image, this
+Because Vidyut has no visible activity when the user screenshots another app, and gets no image, this
 API is irrelevant to background screenshot capture. Keep using the ContentObserver.
 
 ### Android 15 (and 16) screenshot/recording changes
@@ -162,13 +162,13 @@ The KDE MR that introduced it is invent.kde.org/network/kdeconnect-android `!150
 Caveats: `READ_LOGS` can only be granted via ADB (not a normal runtime permission); on some OEMs the
 granted READ_LOGS still doesn't expose other apps' logs, and background-activity-start limits (Android
 10+ "start activity from background" restrictions) can block the invisible-activity launch — the
-`SYSTEM_ALERT_WINDOW` appop is what makes it reliable. This is exactly ImageSync's scenario, so it is
+`SYSTEM_ALERT_WINDOW` appop is what makes it reliable. This is exactly Vidyut's scenario, so it is
 viable if the user is willing to run the ADB grant once. **Marginal on MIUI [UNVERIFIED]:** background
 activity starts and draw-over-other-apps are additionally gated by MIUI toggles.
 
 ### (b) Default IME — confirmed viable but unrealistic
 `isDefaultIme()` is an unconditional allow for reads (ClipboardService.java:1341, 1418-1429). But the
-user would have to switch their keyboard to ImageSync's IME, which is a non-starter for a clipboard-sync
+user would have to switch their keyboard to Vidyut's IME, which is a non-starter for a clipboard-sync
 utility. Confirmed as the "clean" API path, rejected on UX.
 
 ### (c) AccessibilityService
@@ -183,7 +183,7 @@ fit for "read whatever the user copied anywhere". Treat as a fallback, not prima
 clipboard globally" — this is the absence of any such API. **[Partially UNVERIFIED]**.)
 
 ### (d) Share-sheet baseline
-The existing "share to ImageSync" path is the only 100%-stock, no-ADB, no-special-permission way to get
+The existing "share to Vidyut" path is the only 100%-stock, no-ADB, no-special-permission way to get
 arbitrary content (text or image) out of another app — but it costs the user a tap/share action. It's the
 correct universal fallback.
 
@@ -200,7 +200,7 @@ correct universal fallback.
 - Bug tracking the "no auto-send if the persistent notification is disabled" limitation:
   bugs.kde.org/show_bug.cgi?id=446366.
 
-**Realistic verdict for ImageSync text:** without the one-time ADB `READ_LOGS` grant, background
+**Realistic verdict for Vidyut text:** without the one-time ADB `READ_LOGS` grant, background
 auto-read of copied text is **not** possible on 13/14/15 (AOSP-enforced). With it, KDE's exact recipe
 works and is maintained. Otherwise fall back to a manual "send clipboard" tile/notification action or the
 share sheet. Screenshots (Q1) do not have this limitation and should carry the "zero-tap" story.
@@ -236,10 +236,10 @@ section). So a background write is silent and non-intrusive.
   ("Package ... does not belong to <uid>") on multiple MIUI 13 devices — MIUI's security layer
   intercepting clipboard writes.
 - MIUI exposes a per-app "Clipboard" permission and a "Modify system settings" toggle; community reports
-  say enabling the app's clipboard permission (Settings > Apps > ImageSync > Permissions) and setting
+  say enabling the app's clipboard permission (Settings > Apps > Vidyut > Permissions) and setting
   background/autostart to allowed is what unblocks background writes. xiaomiui.net/the-meaning-of-all-miui-permissions
   catalogs these but there is no official spec.
-- Because this is device-specific and undocumented, ImageSync should: attempt `setPrimaryClip`, catch
+- Because this is device-specific and undocumented, Vidyut should: attempt `setPrimaryClip`, catch
   `SecurityException`, and if it fails, surface a one-time "grant Clipboard permission in MIUI settings"
   hint. Consider also showing the received content in the notification so the user can copy it manually
   as a fallback.
@@ -346,7 +346,7 @@ until the next OS event. Adding a phone-side app-level ping is the second high-i
 
 ---
 
-## Architecture implications for ImageSync
+## Architecture implications for Vidyut
 
 | Goal | Feasible? | How | Main caveat |
 |---|---|---|---|
@@ -386,5 +386,5 @@ until the next OS event. Adding a phone-side app-level ping is the second high-i
 - flutter_photo_manager (master): core/PhotoManagerNotifyChannel.kt, core/PhotoManagerPlugin.kt,
   permission/impl/PermissionDelegate34.kt.
 - dontkillmyapp.com/xiaomi (MIUI checklist).
-- ImageSync repo: src/relay/relay.ts (heartbeat 30s/stale 90s), app/lib/src/shared/relay_connection.dart
+- Vidyut repo: src/relay/relay.ts (heartbeat 30s/stale 90s), app/lib/src/shared/relay_connection.dart
   (no client ping), app manifest (dataSync FGS, WAKE_LOCK).

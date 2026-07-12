@@ -27,7 +27,7 @@ class MiuiSetupList extends StatelessWidget {
         _MiuiItem(
           flag: MiuiSetupFlag.autostart,
           title: 'Autostart',
-          description: 'Let ImageSync start itself after MIUI kills it.',
+          description: 'Let Vidyut start itself after MIUI kills it.',
           actionLabel: 'Open autostart manager',
           onAction: actions.openAutostartSettings,
           done: flags[MiuiSetupFlag.autostart] ?? false,
@@ -47,7 +47,7 @@ class MiuiSetupList extends StatelessWidget {
           title: 'Lock in recents',
           // No deep link exists (D5) — "How?" expands this instruction.
           expandableHow:
-              'Open recents, pull down (or long-press) the ImageSync card, '
+              'Open recents, pull down (or long-press) the Vidyut card, '
               'then tap the lock icon.',
           done: flags[MiuiSetupFlag.lockInRecents] ?? false,
           onDone: onFlagChanged,

@@ -17,11 +17,11 @@ class ReceivedImage {
 typedef ReceiveDirectoryProvider = Future<Directory> Function();
 
 /// Must stay under the app files dir subtree served by the manifest's
-/// FileProvider (`imagesync_received/`), or the clipboard content URI
+/// FileProvider (`vidyut_received/`), or the clipboard content URI
 /// cannot be built.
 Future<Directory> _defaultReceiveDirectory() async {
   final support = await getApplicationSupportDirectory();
-  return Directory('${support.path}/imagesync_received');
+  return Directory('${support.path}/vidyut_received');
 }
 
 /// Latest-write-wins store for the newest image payload: bytes go to a file,
@@ -33,8 +33,8 @@ class ReceivedImageRepository {
     ReceiveDirectoryProvider? directoryProvider,
   }) : _directoryProvider = directoryProvider ?? _defaultReceiveDirectory;
 
-  static const _latestImagePathKey = 'imagesync.receive.latestImagePath';
-  static const _latestImageMimeKey = 'imagesync.receive.latestImageMime';
+  static const _latestImagePathKey = 'vidyut.receive.latestImagePath';
+  static const _latestImageMimeKey = 'vidyut.receive.latestImageMime';
 
   final ReceivedPayloadStorage _storage;
   final ReceiveDirectoryProvider _directoryProvider;

@@ -1,6 +1,6 @@
 # Onboarding and permissions flow
 
-Spec for Seamless Sync ticket [#30](https://github.com/Snehit70/imagesync/issues/30).
+Spec for Seamless Sync ticket [#30](https://github.com/Snehit70/vidyut/issues/30).
 Consumes the grant-state contract from
 [`screenshot-observer.md`](screenshot-observer.md) §5 and the MIUI clipboard hint from
 [`zero-tap-receive.md`](zero-tap-receive.md) D3.
@@ -13,7 +13,7 @@ degraded and how to fix it.
 
 Today the app requests only the notification permission
 (`FlutterForegroundTask.requestNotificationPermission()` at service start, see
-`imagesync_foreground_service.dart`). There is no photos-access request, no
+`vidyut_foreground_service.dart`). There is no photos-access request, no
 battery-exemption prompt, no MIUI guidance, and no onboarding UI. Pairing is a separate
 flow. Settings has two toggles (receive notifications, persistent send notification).
 
@@ -101,7 +101,7 @@ completion signal):
 | --- | --- |
 | Autostart | Open MIUI autostart manager (`miui.intent.action.OP_AUTO_START` / security-center component, with `ACTION_APPLICATION_DETAILS_SETTINGS` fallback if unresolvable) |
 | Battery: No restrictions | Open the app's battery-saver page (MIUI power-keeper component, same fallback) |
-| Lock in recents | No deep link exists — "How?" expands an illustrated instruction (open recents → long-press/pull down the ImageSync card → tap the lock) |
+| Lock in recents | No deep link exists — "How?" expands an illustrated instruction (open recents → long-press/pull down the Vidyut card → tap the lock) |
 | Clipboard permission | `miui.intent.action.APP_PERM_EDITOR` with the package extra, app-details fallback — same intent as the reactive hint in `zero-tap-receive.md` D3 |
 
 All MIUI component intents are community-sourced; execution wraps each launch in a
@@ -133,11 +133,11 @@ via self-report — deliberate, for the motivational value of a completed list.
 
 | Step | Title | Body | CTA / Skip consequence |
 | --- | --- | --- | --- |
-| Notifications | "Stay in the loop" | "ImageSync shows a small ongoing notification while sync runs, and a quiet receipt when something arrives from your laptop." | Allow / "You won't see receipts when the laptop sends you things." |
-| Photos | "Spot your screenshots" | "To send screenshots automatically, ImageSync needs access to **all** photos. Pick **Allow all** — with 'Select photos' it can't see new screenshots." | Allow access / "Screenshots won't send themselves — you can still share manually." |
-| Photos (partial) | "Almost — one change needed" | "You picked 'Select photos', so new screenshots stay invisible to ImageSync. Switch to 'Allow all' in settings." | Open settings |
-| Battery | "Keep the link alive" | "Android puts idle apps to sleep, which drops the connection to your laptop. Allow ImageSync to ignore battery optimizations so payloads arrive even when the screen is off." | Allow / "Sync may pause when the phone sleeps." |
-| Xiaomi | "Xiaomi needs a little extra" | "MIUI closes background apps aggressively. These four switches keep ImageSync alive — we can't check them for you, so tick what you've done." | (per-item buttons) / "MIUI will likely kill sync in the background." |
+| Notifications | "Stay in the loop" | "Vidyut shows a small ongoing notification while sync runs, and a quiet receipt when something arrives from your laptop." | Allow / "You won't see receipts when the laptop sends you things." |
+| Photos | "Spot your screenshots" | "To send screenshots automatically, Vidyut needs access to **all** photos. Pick **Allow all** — with 'Select photos' it can't see new screenshots." | Allow access / "Screenshots won't send themselves — you can still share manually." |
+| Photos (partial) | "Almost — one change needed" | "You picked 'Select photos', so new screenshots stay invisible to Vidyut. Switch to 'Allow all' in settings." | Open settings |
+| Battery | "Keep the link alive" | "Android puts idle apps to sleep, which drops the connection to your laptop. Allow Vidyut to ignore battery optimizations so payloads arrive even when the screen is off." | Allow / "Sync may pause when the phone sleeps." |
+| Xiaomi | "Xiaomi needs a little extra" | "MIUI closes background apps aggressively. These four switches keep Vidyut alive — we can't check them for you, so tick what you've done." | (per-item buttons) / "MIUI will likely kill sync in the background." |
 | Pairing | "Connect to your laptop" | (existing pairing flow copy) | — |
 
 Tone: short, concrete, no permission-jargon in titles. Exact strings may be polished

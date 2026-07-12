@@ -3,16 +3,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:imagesync/main.dart';
-import 'package:imagesync/src/activity/last_activity_repository.dart';
-import 'package:imagesync/src/design/motion.dart';
-import 'package:imagesync/src/foreground/foreground_service_client.dart';
-import 'package:imagesync/src/pairing/pairing_code.dart';
-import 'package:imagesync/src/pairing/pairing_repository.dart';
-import 'package:imagesync/src/pairing/relay_discovery.dart';
-import 'package:imagesync/src/settings/app_settings.dart';
-import 'package:imagesync/src/settings/app_settings_repository.dart';
-import 'package:imagesync/src/shared/relay_connection.dart';
+import 'package:vidyut/main.dart';
+import 'package:vidyut/src/activity/last_activity_repository.dart';
+import 'package:vidyut/src/design/motion.dart';
+import 'package:vidyut/src/foreground/foreground_service_client.dart';
+import 'package:vidyut/src/pairing/pairing_code.dart';
+import 'package:vidyut/src/pairing/pairing_repository.dart';
+import 'package:vidyut/src/pairing/relay_discovery.dart';
+import 'package:vidyut/src/settings/app_settings.dart';
+import 'package:vidyut/src/settings/app_settings_repository.dart';
+import 'package:vidyut/src/shared/relay_connection.dart';
 
 void main() {
   // Looping animations (blob morph, pulsing dots) never settle; disable them
@@ -22,7 +22,7 @@ void main() {
 
   testWidgets('shows manual pairing when no relay is paired', (tester) async {
     await tester.pumpWidget(
-      ImageSyncApp(
+      VidyutApp(
         appSettingsRepository: AppSettingsRepository(
           MemoryAppSettingsStorage(),
         ),
@@ -44,7 +44,7 @@ void main() {
 
   testWidgets('saves manual pairing and shows searching state', (tester) async {
     await tester.pumpWidget(
-      ImageSyncApp(
+      VidyutApp(
         appSettingsRepository: AppSettingsRepository(
           MemoryAppSettingsStorage(),
         ),
@@ -83,7 +83,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      ImageSyncApp(
+      VidyutApp(
         appSettingsRepository: AppSettingsRepository(
           MemoryAppSettingsStorage(),
         ),
@@ -105,7 +105,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      ImageSyncApp(
+      VidyutApp(
         appSettingsRepository: AppSettingsRepository(
           MemoryAppSettingsStorage(),
         ),
@@ -116,17 +116,17 @@ void main() {
         pairingRepository: PairingRepository(MemoryPairingStorage()),
         relayConnectionFactory: fakeConnection,
         relayDiscovery: FakeRelayDiscovery(const [
-          DiscoveredRelay(name: 'ImageSync Relay', host: '192.168.1.5', port: 17321),
+          DiscoveredRelay(name: 'Vidyut Relay', host: '192.168.1.5', port: 17321),
         ]),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Nearby relays'), findsOneWidget);
-    expect(find.text('ImageSync Relay'), findsOneWidget);
+    expect(find.text('Vidyut Relay'), findsOneWidget);
     expect(find.text('192.168.1.5:17321'), findsOneWidget);
 
-    await tester.tap(find.text('ImageSync Relay'));
+    await tester.tap(find.text('Vidyut Relay'));
     await tester.pumpAndSettle();
 
     final hostField = tester.widget<TextField>(
@@ -155,7 +155,7 @@ void main() {
 
   testWidgets('shows guidance when no relays are discovered', (tester) async {
     await tester.pumpWidget(
-      ImageSyncApp(
+      VidyutApp(
         appSettingsRepository: AppSettingsRepository(
           MemoryAppSettingsStorage(),
         ),
@@ -181,7 +181,7 @@ void main() {
     final settingsStorage = MemoryAppSettingsStorage();
 
     await tester.pumpWidget(
-      ImageSyncApp(
+      VidyutApp(
         appSettingsRepository: AppSettingsRepository(settingsStorage),
         lastActivityRepository: LastActivityRepository(
           MemoryLastActivityStorage(),
@@ -233,7 +233,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      ImageSyncApp(
+      VidyutApp(
         appSettingsRepository: AppSettingsRepository(MemoryAppSettingsStorage()),
         lastActivityRepository: LastActivityRepository(
           MemoryLastActivityStorage(),

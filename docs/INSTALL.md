@@ -22,13 +22,13 @@ From the repo root:
 bun run install:relay
 ```
 
-This builds `dist/imagesync-relay`, installs it to `~/.local/bin/imagesync-relay`, installs the unit from `packaging/systemd/imagesync-relay.service` to `~/.config/systemd/user/`, and enables + starts the service.
+This builds `dist/vidyut-relay`, installs it to `~/.local/bin/vidyut-relay`, installs the unit from `packaging/systemd/vidyut-relay.service` to `~/.config/systemd/user/`, and enables + starts the service.
 
 The unit is tied to `graphical-session.target`, so the relay starts with your desktop session and stops when you log out.
 
 ## Pairing
 
-On first start the relay creates `~/.config/imagesync/relay.json` (mode 600) with a persistent pairing secret, then prints a QR code and a manual fallback line:
+On first start the relay creates `~/.config/vidyut/relay.json` (mode 600) with a persistent pairing secret, then prints a QR code and a manual fallback line:
 
 ```text
 host=<lan-ip> port=17321 secret=<pairing-secret>
@@ -37,20 +37,20 @@ host=<lan-ip> port=17321 secret=<pairing-secret>
 When running under systemd that output lands in the journal. To pair the phone:
 
 ```bash
-journalctl --user -u imagesync-relay -b --no-pager | tail -40
+journalctl --user -u vidyut-relay -b --no-pager | tail -40
 ```
 
-Scan the QR code with the ImageSync app, or use the app's manual entry with the `host=... port=... secret=...` line. If the QR renders poorly in your terminal, widen the window or use manual entry — the secret never changes between restarts, so pairing once is enough.
+Scan the QR code with the Vidyut app, or use the app's manual entry with the `host=... port=... secret=...` line. If the QR renders poorly in your terminal, widen the window or use manual entry — the secret never changes between restarts, so pairing once is enough.
 
-Alternatively, pair before installing the service by running the binary directly once: `./dist/imagesync-relay`.
+Alternatively, pair before installing the service by running the binary directly once: `./dist/vidyut-relay`.
 
 ## Managing The Service
 
 ```bash
-systemctl --user status imagesync-relay    # is it running?
-journalctl --user -u imagesync-relay -f    # follow logs
-systemctl --user restart imagesync-relay   # restart (e.g. after rebuilding)
-systemctl --user disable --now imagesync-relay   # stop and disable
+systemctl --user status vidyut-relay    # is it running?
+journalctl --user -u vidyut-relay -f    # follow logs
+systemctl --user restart vidyut-relay   # restart (e.g. after rebuilding)
+systemctl --user disable --now vidyut-relay   # stop and disable
 ```
 
 After pulling changes, re-run `bun run install:relay` to rebuild, reinstall, and restart in one step (re-enabling an enabled service is a no-op).
@@ -58,5 +58,5 @@ After pulling changes, re-run `bun run install:relay` to rebuild, reinstall, and
 ## Troubleshooting
 
 - **`wl-copy` errors / clipboard not syncing**: the service can't see your Wayland display. GNOME and KDE import `WAYLAND_DISPLAY` into the systemd user environment automatically; on other compositors (e.g. sway) run `systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP` from your session startup, then restart the service.
-- **Port already in use**: the relay refuses to start if its port (default `17321`) is taken. Change `port` in `~/.config/imagesync/relay.json` and restart.
-- **Phone can't discover the relay**: the relay advertises `_imagesync._tcp` over mDNS. Make sure the laptop firewall allows mDNS (UDP 5353) and the relay port on your LAN zone, and that both devices are on the same network.
+- **Port already in use**: the relay refuses to start if its port (default `17321`) is taken. Change `port` in `~/.config/vidyut/relay.json` and restart.
+- **Phone can't discover the relay**: the relay advertises `_vidyut._tcp` over mDNS. Make sure the laptop firewall allows mDNS (UDP 5353) and the relay port on your LAN zone, and that both devices are on the same network.

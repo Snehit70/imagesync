@@ -1,6 +1,6 @@
-# ImageSync
+# Vidyut
 
-ImageSync is a LAN-only, end-to-end-encrypted clipboard pool for a Linux/Wayland laptop
+Vidyut is a LAN-only, end-to-end-encrypted clipboard pool for a Linux/Wayland laptop
 and an Android phone: copy a screenshot or text on one device, paste it on the other a
 second later. Same WiFi only; nothing ever touches the internet.
 
@@ -31,16 +31,16 @@ The rest of this file is the developer-facing quickstart.
 ```bash
 bun install
 bun run build:relay
-./dist/imagesync-relay --log-level info
+./dist/vidyut-relay --log-level info
 ```
 
-On first run the relay creates `~/.config/imagesync/relay.json` with a persistent pairing secret, prints a QR code, and prints the manual fallback:
+On first run the relay creates `~/.config/vidyut/relay.json` with a persistent pairing secret, prints a QR code, and prints the manual fallback:
 
 ```text
 host=<lan-ip> port=17321 secret=<pairing-secret>
 ```
 
-The relay checks whether the configured port is already in use before starting. It also advertises `_imagesync._tcp` over mDNS for phone discovery.
+The relay checks whether the configured port is already in use before starting. It also advertises `_vidyut._tcp` over mDNS for phone discovery.
 
 ## Install As A Service
 
@@ -65,7 +65,7 @@ bun run build:relay
 This verifies the laptop relay surface only. Full phone E2E requires the Android app.
 
 ```bash
-./dist/imagesync-relay --no-clipboard --port 17321 --log-level debug
+./dist/vidyut-relay --no-clipboard --port 17321 --log-level debug
 ```
 
 In another terminal, run the Bun tests against the in-process relay implementation:

@@ -22,13 +22,13 @@ echo "Building relay binary..."
 (cd "$repo_root" && bun install --frozen-lockfile && bun run build:relay)
 
 mkdir -p "$bin_dir" "$unit_dir"
-install -m 755 "$repo_root/dist/imagesync-relay" "$bin_dir/imagesync-relay"
-install -m 644 "$repo_root/packaging/systemd/imagesync-relay.service" "$unit_dir/imagesync-relay.service"
+install -m 755 "$repo_root/dist/vidyut-relay" "$bin_dir/vidyut-relay"
+install -m 644 "$repo_root/packaging/systemd/vidyut-relay.service" "$unit_dir/vidyut-relay.service"
 
 systemctl --user daemon-reload
-systemctl --user enable --now imagesync-relay.service
+systemctl --user enable --now vidyut-relay.service
 
 echo
-echo "Installed and started imagesync-relay.service."
-echo "Pairing code: journalctl --user -u imagesync-relay -b --no-pager | tail -40"
-echo "Follow logs:  journalctl --user -u imagesync-relay -f"
+echo "Installed and started vidyut-relay.service."
+echo "Pairing code: journalctl --user -u vidyut-relay -b --no-pager | tail -40"
+echo "Follow logs:  journalctl --user -u vidyut-relay -f"

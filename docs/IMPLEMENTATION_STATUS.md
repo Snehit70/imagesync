@@ -1,4 +1,4 @@
-# ImageSync Implementation Status
+# Vidyut Implementation Status
 
 This file is a live gap map against `docs/PRD.md`. It is not a replacement for the PRD.
 
@@ -15,8 +15,8 @@ This file is a live gap map against `docs/PRD.md`. It is not a replacement for t
 - Incoming remote payloads decrypt and write into the laptop clipboard.
 - Relay config persists pairing secret, port, max payload size, device ID, and log level.
 - Relay CLI prints QR plus manual pairing details.
-- Relay advertises `_imagesync._tcp` through mDNS.
-- Relay compiles into `dist/imagesync-relay`.
+- Relay advertises `_vidyut._tcp` through mDNS.
+- Relay compiles into `dist/vidyut-relay`.
 - Flutter Android app exists and builds a debug APK.
 - Android QR/manual pairing UI stores relay host, port, and pairing secret in secure storage.
 - Android WebSocket client authenticates with the same pairing proof as the relay.
@@ -31,8 +31,8 @@ This file is a live gap map against `docs/PRD.md`. It is not a replacement for t
 - Relay installs as a `systemd --user` service: `bun run install:relay` builds the binary, installs the unit from `packaging/systemd/`, and enables it; install/pairing docs in `docs/INSTALL.md`.
 - CI (`.github/workflows/ci.yml`) runs relay typecheck/tests and Flutter analyze/tests on push to main and PRs, and uploads the compiled relay binary and debug APK as artifacts.
 - Incoming text payloads are stored (latest-write-wins, secure storage) and their notification carries a copy payload: tapping it foregrounds the app, which writes the stored text to the Android clipboard (`ReceiveNotificationTapHandler`), covering warm taps and cold launches. The service-isolate clipboard write remains as a best-effort fast path since Android 10+/MIUI can reject background writes.
-- Incoming image payloads are persisted to app-private storage (latest-write-wins, `ReceivedImageRepository`) and their notification carries a copy payload: tapping it foregrounds the app, which writes the image to the Android clipboard through the `imagesync/clipboard` platform channel (`ClipData` + FileProvider content URI in `MainActivity`). `super_clipboard` stays out; the channel replaces it.
-- Android mDNS relay discovery: the pairing screen browses `_imagesync._tcp` (`RelayDiscovery`, `multicast_dns`) under a WifiManager multicast lock held via the `imagesync/multicast` platform channel, lists nearby relays with a refresh action, and tapping one fills host/port so pairing needs only the secret; QR/manual entry stays as the fallback.
+- Incoming image payloads are persisted to app-private storage (latest-write-wins, `ReceivedImageRepository`) and their notification carries a copy payload: tapping it foregrounds the app, which writes the image to the Android clipboard through the `vidyut/clipboard` platform channel (`ClipData` + FileProvider content URI in `MainActivity`). `super_clipboard` stays out; the channel replaces it.
+- Android mDNS relay discovery: the pairing screen browses `_vidyut._tcp` (`RelayDiscovery`, `multicast_dns`) under a WifiManager multicast lock held via the `vidyut/multicast` platform channel, lists nearby relays with a refresh action, and tapping one fills host/port so pairing needs only the secret; QR/manual entry stays as the fallback.
 - Reconnect resilience: the relay heartbeats every connection (ping/pong, `heartbeatIntervalMs`/`staleAfterMs`) and terminates sockets whose peer vanished without a close frame; the Android foreground service reconnects on its own with exponential backoff (2s doubling to 60s, reset on success), and the pool re-send that follows every re-auth is deduplicated by origin+timestamp so reconnects do not re-notify the same payload.
 - Android in-app debug/log view: an in-memory ring buffer (`DebugLog`, 200 entries) in the UI isolate records connection status, auth results (via the `RelayConnection` events stream), payload events with type/size/origin, send outcomes, and errors; the service isolate forwards its events over the task data channel as `{'kind': 'log'}` messages, and a `DebugLogScreen` (bug icon in the app bar) lists them newest-first with a clear action.
 - Flat Raspberry Pink design system applied across all screens: `app/lib/src/design/` holds the palette (raspberry/petal/mist on white, plum ink), Plus Jakarta Sans theme (`google_fonts`, weight-driven 26/16/14/12 scale), spring-motion constants, and the expressive widgets (morphing blob hero, pulsing status dot, ripple-ring success orb, squash-on-press buttons, staggered entrances). Pairing/home, settings, debug log, send-clipboard, and QR screens all use it; looping animations honor `Motion.loopsEnabled` so widget tests settle.
@@ -69,7 +69,7 @@ This file is a live gap map against `docs/PRD.md`. It is not a replacement for t
 bun run typecheck
 bun test
 bun run build:relay
-./dist/imagesync-relay --help
+./dist/vidyut-relay --help
 cd app && flutter test
 cd app && flutter analyze
 cd app && flutter build apk --debug

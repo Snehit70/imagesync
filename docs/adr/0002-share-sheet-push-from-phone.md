@@ -8,7 +8,7 @@ heavy.
 
 We accept the OS constraint instead of fighting it:
 
-- **Phone → laptop:** the user taps *Share → ImageSync* on the content (one tap).
+- **Phone → laptop:** the user taps *Share → Vidyut* on the content (one tap).
   This is the only path the OS reliably allows, and it needs no scary permissions.
 - **Laptop → phone:** the incoming payload fires a notification; tapping it brings
   the app foreground and loads the payload into the clipboard, ready to paste.

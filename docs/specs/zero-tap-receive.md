@@ -1,6 +1,6 @@
 # Zero-tap receive: silent clipboard write with quiet receipt
 
-Spec for Seamless Sync ticket [#29](https://github.com/Snehit70/imagesync/issues/29).
+Spec for Seamless Sync ticket [#29](https://github.com/Snehit70/vidyut/issues/29).
 Research basis: [`docs/research/android-seamless-sync.md`](../research/android-seamless-sync.md) Q3.
 
 **Goal:** a payload arriving from the laptop lands in the phone clipboard with zero taps
@@ -9,7 +9,7 @@ guaranteed copy fallback (the MIUI-blocked path).
 
 ## Current state and why zero-tap doesn't work today
 
-The service isolate (`ImageSyncForegroundTaskHandler` → `ServiceRelayController` →
+The service isolate (`VidyutForegroundTaskHandler` → `ServiceRelayController` →
 `PayloadReceiver`) already attempts a best-effort clipboard write on every received
 frame — but **both attempts structurally fail in the service isolate**, independent of
 MIUI:
@@ -18,7 +18,7 @@ MIUI:
   Android-side handler (`PlatformPlugin`) is only attached to a `FlutterEngine` when an
   Activity attaches to it. The foreground task's engine is headless, so the call fails
   with `MissingPluginException` every time.
-- **Image** goes through the `imagesync/clipboard` MethodChannel, which is registered
+- **Image** goes through the `vidyut/clipboard` MethodChannel, which is registered
   only in `MainActivity.configureFlutterEngine` — the activity engine. The service
   engine has no handler; `MissingPluginException` again (already noted in a comment in
   `payload_receiver.dart`).
@@ -34,8 +34,8 @@ android-15.0.0_r1). The gap is purely our channel wiring.
 ### D1 — Native clipboard access becomes a local Flutter plugin
 
 Move clipboard writing out of `MainActivity` into a local plugin package (path
-dependency, e.g. `app/plugins/imagesync_clipboard/`) whose Kotlin class implements
-`FlutterPlugin` and registers the `imagesync/clipboard` MethodChannel using the
+dependency, e.g. `app/plugins/vidyut_clipboard/`) whose Kotlin class implements
+`FlutterPlugin` and registers the `vidyut/clipboard` MethodChannel using the
 **application context**.
 
 Why a plugin package rather than a channel in `MainActivity` or an `Application`
@@ -50,11 +50,11 @@ Channel methods:
 
 - `writeText(text)` — builds `ClipData.newPlainText` and calls `setPrimaryClip`.
 - `writeImage(path, mime)` — existing behavior moved verbatim: FileProvider content
-  URI over the `imagesync_received/` subtree, `ClipData` with the mime, `setPrimaryClip`.
+  URI over the `vidyut_received/` subtree, `ClipData` with the mime, `setPrimaryClip`.
 
 Dart side: `FlutterAndroidClipboard.writeText` switches from `Clipboard.setData` to the
 channel's `writeText`, so text and image share one native path and one failure taxonomy.
-`MainActivity` drops its `imagesync/clipboard` registration (the multicast channel
+`MainActivity` drops its `vidyut/clipboard` registration (the multicast channel
 stays). The UI-isolate tap handler uses the same channel — it works there too.
 
 ### D2 — The service writes the clipboard directly on arrival
@@ -84,24 +84,24 @@ flips the MIUI Clipboard permission. Mitigations:
 
 - **One-time MIUI hint** on `SecurityException`: a normal-importance notification shown
   at most once (flag persisted in settings storage), text directing the user to enable
-  the Clipboard permission for ImageSync. Tap fires the community-known MIUI permission
+  the Clipboard permission for Vidyut. Tap fires the community-known MIUI permission
   editor intent (`miui.intent.action.APP_PERM_EDITOR` with the package extra), falling
   back to the standard app-details settings screen if that activity doesn't resolve.
   The intent is community-sourced/unverified — execution must verify it on the real
   device and keep the fallback.
 - **Proactive setup on Xiaomi devices** (showing the hint during onboarding rather than
   waiting for a failure) belongs to the
-  [Onboarding and permissions flow spec (#30)](https://github.com/Snehit70/imagesync/issues/30),
+  [Onboarding and permissions flow spec (#30)](https://github.com/Snehit70/vidyut/issues/30),
   not here.
 - The tap-to-copy receipt (D4) remains the universal fallback either way.
 
 ### D4 — Quiet receipt replaces the alerting notification
 
-The current `imagesync_payloads` channel is `Importance.high` (heads-up + sound).
+The current `vidyut_payloads` channel is `Importance.high` (heads-up + sound).
 Android fixes a channel's importance at creation and won't let the app lower it later,
-so the quiet receipt needs a **new channel**: `imagesync_receipts`, `Importance.low`
+so the quiet receipt needs a **new channel**: `vidyut_receipts`, `Importance.low`
 (no sound, no heads-up, silent in the shade). Execution deletes the old
-`imagesync_payloads` channel on upgrade so stale high-importance behavior doesn't
+`vidyut_payloads` channel on upgrade so stale high-importance behavior doesn't
 linger on existing installs.
 
 One receipt notification per received payload, on the new channel, replacing (not

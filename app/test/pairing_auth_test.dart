@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/shared/pairing_auth.dart';
+import 'package:vidyut/src/shared/pairing_auth.dart';
 
 void main() {
   test('creates a stable HMAC proof for the relay challenge', () async {

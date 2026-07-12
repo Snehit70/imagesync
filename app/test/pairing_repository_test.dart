@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/pairing/pairing_code.dart';
-import 'package:imagesync/src/pairing/pairing_repository.dart';
+import 'package:vidyut/src/pairing/pairing_code.dart';
+import 'package:vidyut/src/pairing/pairing_repository.dart';
 
 void main() {
   test('persists pairing so it survives app restarts', () async {

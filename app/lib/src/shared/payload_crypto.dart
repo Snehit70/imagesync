@@ -14,7 +14,7 @@ class PayloadCrypto {
     iterations: 200000,
     bits: 256,
   );
-  static final _salt = utf8.encode('imagesync-v1-pairing-secret');
+  static final _salt = utf8.encode('vidyut-v1-pairing-secret');
 
   final Random _random;
 

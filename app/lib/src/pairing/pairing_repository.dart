@@ -47,9 +47,9 @@ class MemoryPairingStorage implements PairingStorage {
 class PairingRepository {
   const PairingRepository(this._storage);
 
-  static const _hostKey = 'imagesync.pairing.host';
-  static const _portKey = 'imagesync.pairing.port';
-  static const _secretKey = 'imagesync.pairing.secret';
+  static const _hostKey = 'vidyut.pairing.host';
+  static const _portKey = 'vidyut.pairing.port';
+  static const _secretKey = 'vidyut.pairing.secret';
 
   final PairingStorage _storage;
 

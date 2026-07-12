@@ -602,9 +602,9 @@ class ServiceRelayController {
 
   (String, String) _notificationCopy(ConnectionStatus status) {
     final title = switch (status) {
-      ConnectionStatus.connected => 'ImageSync connected',
-      ConnectionStatus.searching => 'ImageSync connecting',
-      ConnectionStatus.offline => 'ImageSync offline',
+      ConnectionStatus.connected => 'Vidyut connected',
+      ConnectionStatus.searching => 'Vidyut connecting',
+      ConnectionStatus.offline => 'Vidyut offline',
     };
     if (_screenshotPaused) {
       // The paused state is persistent and recovery-worthy (§5), so it

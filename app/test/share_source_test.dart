@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/share/share_payload.dart';
-import 'package:imagesync/src/share/share_source.dart';
+import 'package:vidyut/src/share/share_payload.dart';
+import 'package:vidyut/src/share/share_source.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 
 void main() {

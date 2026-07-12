@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/shared/payload_crypto.dart';
-import 'package:imagesync/src/shared/wire.dart';
+import 'package:vidyut/src/shared/payload_crypto.dart';
+import 'package:vidyut/src/shared/wire.dart';
 
 void main() {
   test('round-trips encrypted text payloads', () async {

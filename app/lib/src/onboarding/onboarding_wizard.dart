@@ -237,7 +237,7 @@ class _OnboardingWizardState extends State<OnboardingWizard>
       setState(() => _pairingError = error.message);
     } on FormatException {
       setState(
-        () => _pairingError = 'QR code is not a valid ImageSync pairing code.',
+        () => _pairingError = 'QR code is not a valid Vidyut pairing code.',
       );
     }
   }
@@ -322,7 +322,7 @@ class _OnboardingWizardState extends State<OnboardingWizard>
       icon: Icons.notifications_active_outlined,
       title: 'Stay in the loop',
       body:
-          'ImageSync shows a small ongoing notification while sync runs, and '
+          'Vidyut shows a small ongoing notification while sync runs, and '
           'a quiet receipt when something arrives from your laptop.',
       consequence: "You won't see receipts when the laptop sends you things.",
       primaryLabel: _notificationsRequested ? 'Open settings' : 'Allow',
@@ -345,7 +345,7 @@ class _OnboardingWizardState extends State<OnboardingWizard>
         title: 'Almost — one change needed',
         body:
             "You picked 'Select photos', so new screenshots stay invisible "
-            "to ImageSync. Switch to 'Allow all' in settings.",
+            "to Vidyut. Switch to 'Allow all' in settings.",
         consequence:
             "Screenshots won't send themselves — you can still share "
             'manually.',
@@ -359,7 +359,7 @@ class _OnboardingWizardState extends State<OnboardingWizard>
       icon: Icons.photo_library_outlined,
       title: 'Spot your screenshots',
       body:
-          'To send screenshots automatically, ImageSync needs access to all '
+          'To send screenshots automatically, Vidyut needs access to all '
           "photos. Pick Allow all — with 'Select photos' it can't see new "
           'screenshots.',
       consequence:
@@ -377,7 +377,7 @@ class _OnboardingWizardState extends State<OnboardingWizard>
       title: 'Keep the link alive',
       body:
           'Android puts idle apps to sleep, which drops the connection to '
-          'your laptop. Allow ImageSync to ignore battery optimizations so '
+          'your laptop. Allow Vidyut to ignore battery optimizations so '
           'payloads arrive even when the screen is off.',
       consequence: 'Sync may pause when the phone sleeps.',
       primaryLabel: _batteryRequested ? 'Open settings' : 'Allow',
@@ -398,7 +398,7 @@ class _OnboardingWizardState extends State<OnboardingWizard>
         const SizedBox(height: 10),
         Text(
           'MIUI closes background apps aggressively. These four switches keep '
-          "ImageSync alive — we can't check them for you, so tick what "
+          "Vidyut alive — we can't check them for you, so tick what "
           "you've done.",
           style: textTheme.bodyMedium?.copyWith(color: Palette.muted),
         ).entrance(1),

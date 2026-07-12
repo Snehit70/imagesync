@@ -112,7 +112,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         title: const Text('Forget this laptop?'),
         content: const Text(
-          "ImageSync will delete this pairing. You'll need to pair again — "
+          "Vidyut will delete this pairing. You'll need to pair again — "
           'by QR or manually — to sync with your laptop.',
         ),
         actions: [

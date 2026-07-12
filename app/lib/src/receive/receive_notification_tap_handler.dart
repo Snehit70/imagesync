@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:imagesync_clipboard/imagesync_clipboard.dart';
+import 'package:vidyut_clipboard/vidyut_clipboard.dart';
 
 import 'payload_receiver.dart';
 import 'received_image_repository.dart';
@@ -12,14 +12,14 @@ abstract interface class ClipboardPermissionSettingsOpener {
 }
 
 /// Opens the MIUI permission editor (or the app-details fallback) through
-/// the imagesync_clipboard plugin.
+/// the vidyut_clipboard plugin.
 class ChannelClipboardPermissionSettingsOpener
     implements ClipboardPermissionSettingsOpener {
   const ChannelClipboardPermissionSettingsOpener([
-    this._clipboard = const ImagesyncClipboard(),
+    this._clipboard = const VidyutClipboard(),
   ]);
 
-  final ImagesyncClipboard _clipboard;
+  final VidyutClipboard _clipboard;
 
   @override
   Future<void> open() => _clipboard.openClipboardPermissionSettings();

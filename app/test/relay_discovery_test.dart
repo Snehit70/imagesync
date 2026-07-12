@@ -4,11 +4,11 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:multicast_dns/multicast_dns.dart';
 
-import 'package:imagesync/src/pairing/relay_discovery.dart';
+import 'package:vidyut/src/pairing/relay_discovery.dart';
 
 void main() {
   const service = RelayDiscovery.serviceName;
-  const instance = 'ImageSync Relay.$service';
+  const instance = 'Vidyut Relay.$service';
 
   test('discovers a relay from PTR -> SRV -> A records', () async {
     final client = FakeMDnsClient({
@@ -38,7 +38,7 @@ void main() {
     final relays = await discovery.discover();
 
     expect(relays, const [
-      DiscoveredRelay(name: 'ImageSync Relay', host: '192.168.1.5', port: 17321),
+      DiscoveredRelay(name: 'Vidyut Relay', host: '192.168.1.5', port: 17321),
     ]);
     expect(client.started, isTrue);
     expect(client.stopped, isTrue);

@@ -93,7 +93,7 @@ void main() {
   });
 
   group('event channel split', () {
-    const eventChannelName = 'imagesync/screenshot_events';
+    const eventChannelName = 'vidyut/screenshot_events';
     late ChannelScreenshotWatcher watcher;
 
     void emitNative(List<Object?> items) {

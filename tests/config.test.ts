@@ -6,7 +6,7 @@ import { loadOrCreateRelayConfig } from "../src/relay/config";
 
 describe("relay config", () => {
   test("creates a persistent pairing secret on first run", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "imagesync-config-"));
+    const dir = await mkdtemp(join(tmpdir(), "vidyut-config-"));
     const path = join(dir, "relay.json");
 
     const first = await loadOrCreateRelayConfig(path);

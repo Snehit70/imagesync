@@ -1,6 +1,6 @@
 # Spec: Screenshot auto-push pipeline — observer event to encrypted publish
 
-Status: locked (resolves [#28](https://github.com/Snehit70/imagesync/issues/28)).
+Status: locked (resolves [#28](https://github.com/Snehit70/vidyut/issues/28)).
 Research basis: `docs/research/android-seamless-sync.md` Q1/Q4.
 Upstream: the [screenshot observer spec](screenshot-observer.md) ends at a screenshot event
 delivered to the service isolate; this spec starts there and ends at the frame acked by the
@@ -14,7 +14,7 @@ relay. The laptop leg (broadcast → Wayland clipboard write) already exists in
 single-slot latest-wins pending frame, attached to whichever `RelayConnection` is current.**
 
 - New file `app/lib/src/push/screenshot_push_controller.dart`. Created once at service start
-  (wired in `ImageSyncForegroundTaskHandler._relayController()` like the other collaborators)
+  (wired in `VidyutForegroundTaskHandler._relayController()` like the other collaborators)
   and injected into `ServiceRelayController`, mirroring how `receiverFactory` is injected —
   constructor-injected reader/crypto/clock so it stays unit-testable.
 - `ServiceRelayController` is the integration point, not the implementation: `_sync()` calls
@@ -22,7 +22,7 @@ single-slot latest-wins pending frame, attached to whichever `RelayConnection` i
   calls `detachSession()`. The controller is **long-lived across reconnects** — connections are
   torn down and rebuilt on every `_sync()`, and the pending frame must survive that (it is the
   offline hold, §6).
-- The controller consumes the observer's event stream (the `imagesync/screenshot_events`
+- The controller consumes the observer's event stream (the `vidyut/screenshot_events`
   EventChannel surfaced by the watcher from the observer spec §6), which only flows while the
   watcher runs — so the auto-push toggle (§7) gates the whole pipeline at the watcher.
 - Everything runs in the service isolate. Nothing is forwarded to the UI isolate except debug
@@ -38,7 +38,7 @@ connection per screenshot would pay connect+auth latency against the 2s bar for 
 **Decision: a `readImage` method on the existing observer plugin channel, with a short retry
 for MIUI indexing lag.**
 
-- `MethodChannel imagesync/screenshot_observer` gains `readImage(id)` → `Uint8List`:
+- `MethodChannel vidyut/screenshot_observer` gains `readImage(id)` → `Uint8List`:
   `contentResolver.openInputStream(ContentUris.withAppendedId(EXTERNAL_CONTENT_URI, id))`,
   read fully, return the bytes. Dart cannot open `content://` URIs; this stays in the plugin.
   The read runs on the plugin's existing observer `HandlerThread` (never the main thread), and
@@ -218,9 +218,9 @@ already defines (`recipients: 0` → reconnect → replay), with `screenshot_hel
 
 ## Out of scope here
 
-- Permission UX and MIUI setup screens — onboarding spec ([#30](https://github.com/Snehit70/imagesync/issues/30)).
+- Permission UX and MIUI setup screens — onboarding spec ([#30](https://github.com/Snehit70/vidyut/issues/30)).
 - Socket keepalive/reconnect cadence that determines *when* a held frame gets its reconnect —
-  keepalive spec ([#24](https://github.com/Snehit70/imagesync/issues/24)) and survival
-  measurements ([#26](https://github.com/Snehit70/imagesync/issues/26)).
+  keepalive spec ([#24](https://github.com/Snehit70/vidyut/issues/24)) and survival
+  measurements ([#26](https://github.com/Snehit70/vidyut/issues/26)).
 - Which notification buttons/screens remain after zero-tap lands — the notification-surface
   ticket graduated by this spec.

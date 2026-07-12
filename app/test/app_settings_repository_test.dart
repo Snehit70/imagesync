@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/settings/app_settings.dart';
-import 'package:imagesync/src/settings/app_settings_repository.dart';
+import 'package:vidyut/src/settings/app_settings.dart';
+import 'package:vidyut/src/settings/app_settings_repository.dart';
 
 void main() {
   test('loads the default notification settings on first run', () async {

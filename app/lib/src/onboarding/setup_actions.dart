@@ -1,5 +1,5 @@
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:imagesync_clipboard/imagesync_clipboard.dart';
+import 'package:vidyut_clipboard/vidyut_clipboard.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:screenshot_observer/screenshot_observer.dart';
 
@@ -42,11 +42,11 @@ abstract interface class SetupActions {
 
 class PlatformSetupActions implements SetupActions {
   PlatformSetupActions({
-    this.clipboard = const ImagesyncClipboard(),
+    this.clipboard = const VidyutClipboard(),
     ScreenshotWatcher? screenshotWatcher,
   }) : _screenshotWatcher = screenshotWatcher ?? ChannelScreenshotWatcher();
 
-  final ImagesyncClipboard clipboard;
+  final VidyutClipboard clipboard;
   final ScreenshotWatcher _screenshotWatcher;
 
   @override

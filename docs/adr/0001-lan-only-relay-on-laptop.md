@@ -1,6 +1,6 @@
 # LAN-only relay hosted on the laptop
 
-ImageSync syncs the clipboard pool only between devices on the same WiFi network,
+Vidyut syncs the clipboard pool only between devices on the same WiFi network,
 via a small relay that runs on the laptop. Nothing leaves the LAN.
 
 We deliberately rejected the cross-network alternatives:

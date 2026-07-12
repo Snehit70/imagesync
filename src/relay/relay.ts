@@ -97,7 +97,7 @@ export async function createRelay(options: RelayOptions): Promise<RelayHandle> {
       if (new URL(request.url).pathname === "/health") {
         return Response.json(healthSnapshot(startedAt, devices, pool.current));
       }
-      return new Response("ImageSync relay", { status: 200 });
+      return new Response("Vidyut relay", { status: 200 });
     },
     websocket: {
       open(socket) {

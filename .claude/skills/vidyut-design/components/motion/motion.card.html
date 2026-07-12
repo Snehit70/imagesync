@@ -1,0 +1,63 @@
+<!-- @dsCard group="Components" viewport="700x260" name="Motion" subtitle="Morphing blob, pulsing dot, ripple rings, press squash, entrance" -->
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body { margin: 0; background: var(--ground); padding: 16px; }</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { MorphingBlob, PulsingDot, RippleRings, PressableScale, Entrance, Button } = window.VidyutDesignSystem_5c35fc;
+
+const label = { fontSize: 11, fontWeight: 600, color: "var(--muted)", textAlign: "center", fontFamily: "var(--font-sans)" };
+
+function Demo() {
+  return (
+    <div style={{ display: "flex", gap: 24, alignItems: "center", justifyContent: "center" }}>
+      <Entrance index={0}>
+        <div style={{ display: "grid", gap: 8, justifyItems: "center" }}>
+          <MorphingBlob size={130}>
+            <div style={{ width: 56, height: 56, background: "#fff", borderRadius: "50%", display: "grid", placeItems: "center" }}>
+              <span className="material-icons" style={{ color: "var(--raspberry)", fontSize: 26 }}>link</span>
+            </div>
+          </MorphingBlob>
+          <div style={label}>MorphingBlob</div>
+        </div>
+      </Entrance>
+      <Entrance index={1}>
+        <div style={{ display: "grid", gap: 8, justifyItems: "center" }}>
+          <RippleRings size={130}>
+            <div style={{ width: 56, height: 56, background: "var(--raspberry)", borderRadius: "50%", display: "grid", placeItems: "center" }}>
+              <span className="material-icons" style={{ color: "#fff", fontSize: 26 }}>check</span>
+            </div>
+          </RippleRings>
+          <div style={label}>RippleRings</div>
+        </div>
+      </Entrance>
+      <Entrance index={2}>
+        <div style={{ display: "grid", gap: 8, justifyItems: "center", width: 130 }}>
+          <div style={{ height: 130, display: "grid", placeItems: "center" }}><PulsingDot size={12} /></div>
+          <div style={label}>PulsingDot</div>
+        </div>
+      </Entrance>
+      <Entrance index={3}>
+        <div style={{ display: "grid", gap: 8, justifyItems: "center", width: 170 }}>
+          <div style={{ height: 130, display: "grid", placeItems: "center", width: "100%" }}>
+            <PressableScale style={{ width: "100%" }}><Button>Press me</Button></PressableScale>
+          </div>
+          <div style={label}>PressableScale · Entrance</div>
+        </div>
+      </Entrance>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script>
+</body>
+</html>

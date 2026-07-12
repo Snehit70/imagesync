@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-  package="dev.snehit.imagesync.screenshot_observer">
+  package="dev.snehit.vidyut.screenshot_observer">
     <!-- Media-read permissions live in the app manifest (screenshot-observer
          spec §5), not here: the leaf package holds no permissions of its own. -->
 </manifest>

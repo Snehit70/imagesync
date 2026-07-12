@@ -1,14 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/receive/received_image_repository.dart';
-import 'package:imagesync/src/receive/received_text_repository.dart';
+import 'package:vidyut/src/receive/received_image_repository.dart';
+import 'package:vidyut/src/receive/received_text_repository.dart';
 
 void main() {
   late Directory tempDir;
 
   setUp(() async {
-    tempDir = await Directory.systemTemp.createTemp('imagesync_repo_test');
+    tempDir = await Directory.systemTemp.createTemp('vidyut_repo_test');
   });
 
   tearDown(() async {

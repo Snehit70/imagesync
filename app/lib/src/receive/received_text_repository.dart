@@ -40,7 +40,7 @@ class MemoryReceivedPayloadStorage implements ReceivedPayloadStorage {
 class ReceivedTextRepository {
   const ReceivedTextRepository(this._storage);
 
-  static const _latestTextKey = 'imagesync.receive.latestText';
+  static const _latestTextKey = 'vidyut.receive.latestText';
 
   final ReceivedPayloadStorage _storage;
 

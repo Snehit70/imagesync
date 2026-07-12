@@ -1,6 +1,6 @@
 name: screenshot_observer
 description: >-
-  App-local ImageSync plugin hosting a MediaStore ContentObserver from
+  App-local Vidyut plugin hosting a MediaStore ContentObserver from
   application context, so screenshot detection works in the headless
   foreground-service engine as well as the activity engine.
 version: 0.0.1
@@ -23,5 +23,5 @@ flutter:
   plugin:
     platforms:
       android:
-        package: dev.snehit.imagesync.screenshot_observer
+        package: dev.snehit.vidyut.screenshot_observer
         pluginClass: ScreenshotObserverPlugin

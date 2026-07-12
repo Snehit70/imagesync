@@ -25,7 +25,7 @@ interface MdnsAdvertisementOptions {
   addresses: string[];
 }
 
-const serviceName = "_imagesync._tcp.local";
+const serviceName = "_vidyut._tcp.local";
 
 export function startMdnsAdvertisement(options: MdnsAdvertisementOptions): () => void {
   const responder = options.responder ?? (multicastDns() as MdnsResponder);
@@ -59,7 +59,7 @@ function createServiceRecords(options: MdnsAdvertisementOptions): MdnsRecord[] {
       name: instanceServiceName,
       type: "TXT",
       ttl: 120,
-      data: ["v=1", "service=imagesync"],
+      data: ["v=1", "service=vidyut"],
     },
     ...options.addresses.map((address): MdnsRecord => ({ name: target, type: "A", ttl: 120, data: address })),
   ];

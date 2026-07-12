@@ -1,0 +1,10 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  package="dev.snehit.vidyut.vidyut_clipboard">
+    <!-- Package-visibility carve-out so resolveActivity can see the MIUI
+         permission editor on Android 11+. -->
+    <queries>
+        <intent>
+            <action android:name="miui.intent.action.APP_PERM_EDITOR" />
+        </intent>
+    </queries>
+</manifest>

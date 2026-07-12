@@ -14,9 +14,9 @@ import 'settings_screen.dart';
 /// dialog), so these commands are the whole flow — there is no in-app request
 /// button. `force-stop` makes the app re-read its now-granted permission.
 const clipboardAutoSendAdbCommands =
-    'adb -d shell pm grant dev.snehit.imagesync.imagesync android.permission.READ_LOGS\n'
-    'adb -d shell appops set dev.snehit.imagesync.imagesync SYSTEM_ALERT_WINDOW allow\n'
-    'adb -d shell am force-stop dev.snehit.imagesync.imagesync';
+    'adb -d shell pm grant dev.snehit.vidyut.vidyut android.permission.READ_LOGS\n'
+    'adb -d shell appops set dev.snehit.vidyut.vidyut SYSTEM_ALERT_WINDOW allow\n'
+    'adb -d shell am force-stop dev.snehit.vidyut.vidyut';
 
 /// Advanced → Clipboard auto-send (read-logs-auto-text D6). Gated behind the
 /// "advanced" affordance in Settings so a normal user never lands on adb
@@ -130,7 +130,7 @@ class _ClipboardAutoSendScreenState extends State<ClipboardAutoSendScreen>
               child: Text(
                 'On Xiaomi (MIUI/HyperOS) this may still not work until you also '
                 'enable "Display pop-up windows while running in the background" '
-                'for ImageSync in the app\'s permission settings.',
+                'for Vidyut in the app\'s permission settings.',
                 style: TextStyle(color: Palette.muted),
               ),
             ),

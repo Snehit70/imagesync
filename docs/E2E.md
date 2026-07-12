@@ -1,6 +1,6 @@
 # Manual Two-Direction E2E Script
 
-This is the acceptance script for ImageSync v1: laptop ↔ phone clipboard sync verified in both directions on real hardware. Run every step in order; the run is **green** only if every ✅ checkpoint passes.
+This is the acceptance script for Vidyut v1: laptop ↔ phone clipboard sync verified in both directions on real hardware. Run every step in order; the run is **green** only if every ✅ checkpoint passes.
 
 Hardware: the Linux/Wayland laptop running the relay and the Android phone, on the same WiFi.
 
@@ -9,8 +9,8 @@ Hardware: the Linux/Wayland laptop running the relay and the Android phone, on t
 On the laptop:
 
 ```bash
-systemctl --user status imagesync-relay        # active (running)
-journalctl --user -u imagesync-relay -b --no-pager | tail -40   # QR + manual pairing line
+systemctl --user status vidyut-relay        # active (running)
+journalctl --user -u vidyut-relay -b --no-pager | tail -40   # QR + manual pairing line
 ```
 
 If the relay is not installed yet, run `bun run install:relay` from the repo root (see `docs/INSTALL.md`).
@@ -18,13 +18,13 @@ If the relay is not installed yet, run `bun run install:relay` from the repo roo
 On the phone:
 
 - Install the debug APK: `adb install -r app/build/app/outputs/flutter-apk/app-debug.apk` (build with `cd app && flutter build apk --debug`).
-- MIUI: Settings → Battery → ImageSync → **No restrictions**, so the foreground service survives backgrounding.
+- MIUI: Settings → Battery → Vidyut → **No restrictions**, so the foreground service survives backgrounding.
 - Phone and laptop on the same WiFi network.
 
 ## 1. Pairing
 
-1. Open ImageSync on the phone.
-2. The pairing screen should list the relay discovered over mDNS (`_imagesync._tcp`). Tap it — host/port fill in; enter only the secret from the journal line.
+1. Open Vidyut on the phone.
+2. The pairing screen should list the relay discovered over mDNS (`_vidyut._tcp`). Tap it — host/port fill in; enter only the secret from the journal line.
    - ✅ Relay appears in the discovery list without typing host/port.
    - Fallback: scan the QR from the journal, or type the full `host=… port=… secret=…` line manually.
 3. Pair.
@@ -64,7 +64,7 @@ On the phone:
 
 ## 4. Phone → laptop: text
 
-1. In any phone app, select text → Share → **ImageSync**.
+1. In any phone app, select text → Share → **Vidyut**.
 2. On the laptop:
 
    ```bash
@@ -75,7 +75,7 @@ On the phone:
 
 ## 5. Phone → laptop: image
 
-1. In the phone gallery, share a photo → **ImageSync**.
+1. In the phone gallery, share a photo → **Vidyut**.
 2. On the laptop:
 
    ```bash
@@ -98,7 +98,7 @@ On the phone:
 
 - Open the in-app debug log (bug icon in the app bar).
   - ✅ Entries show the connection, auth, payload (type/size/origin), and send events from this run.
-- `journalctl --user -u imagesync-relay -f` during a sync.
+- `journalctl --user -u vidyut-relay -f` during a sync.
   - ✅ Relay emits structured, timestamped, leveled log lines.
 
 ## Recording a run
@@ -121,7 +121,7 @@ lock-in-recents, hibernation off), auto-push toggle on.
 Log taps used throughout:
 
 ```bash
-relay-log() { journalctl --user -u imagesync-relay -o cat "$@"; }   # one JSON object per line
+relay-log() { journalctl --user -u vidyut-relay -o cat "$@"; }   # one JSON object per line
 relay-log -f | jq -c 'select(.message=="clipboard_write") | {nonce, e2eMs}'
 ```
 
@@ -155,7 +155,7 @@ Phone-side numbers come from the in-app debug log (bug icon in the app bar).
 
 ## 10. Offline hold and doze delivery
 
-1. Stop the relay (`systemctl --user stop imagesync-relay`). Take a screenshot.
+1. Stop the relay (`systemctl --user stop vidyut-relay`). Take a screenshot.
    - ✅ Phone logs `screenshot_held`.
 2. Start the relay. After the phone reconnects:
    - ✅ Phone logs `screenshot_republished{heldForMs}`; relay logs the replay signature

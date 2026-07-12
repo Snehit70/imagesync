@@ -3,18 +3,18 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/receive/payload_receiver.dart';
-import 'package:imagesync/src/receive/received_image_repository.dart';
-import 'package:imagesync/src/receive/received_text_repository.dart';
-import 'package:imagesync/src/shared/payload_crypto.dart';
-import 'package:imagesync/src/shared/wire.dart';
-import 'package:imagesync_clipboard/imagesync_clipboard.dart';
+import 'package:vidyut/src/receive/payload_receiver.dart';
+import 'package:vidyut/src/receive/received_image_repository.dart';
+import 'package:vidyut/src/receive/received_text_repository.dart';
+import 'package:vidyut/src/shared/payload_crypto.dart';
+import 'package:vidyut/src/shared/wire.dart';
+import 'package:vidyut_clipboard/vidyut_clipboard.dart';
 
 void main() {
   late Directory tempDir;
 
   setUp(() async {
-    tempDir = await Directory.systemTemp.createTemp('imagesync_receive_test');
+    tempDir = await Directory.systemTemp.createTemp('vidyut_receive_test');
   });
 
   tearDown(() async {
@@ -134,7 +134,7 @@ void main() {
         crypto: PayloadCrypto(),
         clipboard: ThrowingAndroidClipboard(
           PlatformException(
-            code: ImagesyncClipboard.blockedErrorCode,
+            code: VidyutClipboard.blockedErrorCode,
             message: 'MIUI denied it',
           ),
         ),
@@ -248,7 +248,7 @@ void main() {
         crypto: PayloadCrypto(),
         clipboard: FakeAndroidClipboard(),
         imageClipboard: ThrowingAndroidImageClipboard(
-          PlatformException(code: ImagesyncClipboard.blockedErrorCode),
+          PlatformException(code: VidyutClipboard.blockedErrorCode),
         ),
         notifier: notifier,
         receivedTextRepository: ReceivedTextRepository(storage),

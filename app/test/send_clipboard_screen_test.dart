@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/foreground/send_clipboard_screen.dart';
-import 'package:imagesync/src/share/share_payload.dart';
-import 'package:imagesync/src/share/share_publisher.dart';
+import 'package:vidyut/src/foreground/send_clipboard_screen.dart';
+import 'package:vidyut/src/share/share_payload.dart';
+import 'package:vidyut/src/share/share_publisher.dart';
 
 void main() {
   testWidgets('publishes clipboard text immediately when opened', (

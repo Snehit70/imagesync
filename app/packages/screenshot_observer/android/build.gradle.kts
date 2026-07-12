@@ -1,4 +1,4 @@
-group = "dev.snehit.imagesync.screenshot_observer"
+group = "dev.snehit.vidyut.screenshot_observer"
 version = "1.0-SNAPSHOT"
 
 buildscript {
@@ -26,7 +26,7 @@ plugins {
 }
 
 android {
-    namespace = "dev.snehit.imagesync.screenshot_observer"
+    namespace = "dev.snehit.vidyut.screenshot_observer"
 
     compileSdk = 36
 

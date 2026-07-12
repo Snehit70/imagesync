@@ -1,5 +1,5 @@
-name: imagesync
-description: "A new Flutter project."
+name: vidyut
+description: "LAN-only end-to-end-encrypted clipboard sync between a Linux laptop and an Android phone."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -46,8 +46,8 @@ dependencies:
   flutter_foreground_task: ^9.2.2
   permission_handler: ^12.0.1
   google_fonts: ^8.1.0
-  imagesync_clipboard:
-    path: packages/imagesync_clipboard
+  vidyut_clipboard:
+    path: packages/vidyut_clipboard
   screenshot_observer:
     path: packages/screenshot_observer
   clipboard_autosend:

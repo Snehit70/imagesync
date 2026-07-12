@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/activity/last_activity.dart';
-import 'package:imagesync/src/activity/last_activity_repository.dart';
+import 'package:vidyut/src/activity/last_activity.dart';
+import 'package:vidyut/src/activity/last_activity_repository.dart';
 
 void main() {
   group('LastActivity', () {

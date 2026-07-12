@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:imagesync/src/debug/debug_log.dart';
-import 'package:imagesync/src/debug/debug_log_screen.dart';
+import 'package:vidyut/src/debug/debug_log.dart';
+import 'package:vidyut/src/debug/debug_log_screen.dart';
 
 void main() {
   test('keeps entries in order and evicts the oldest past capacity', () {

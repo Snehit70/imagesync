@@ -1,7 +1,7 @@
 # Keepalive and reconnect spec
 
-Resolves [#24 Keepalive and reconnect spec: keep the socket warm through idle](https://github.com/Snehit70/imagesync/issues/24)
-on the [Seamless Sync map](https://github.com/Snehit70/imagesync/issues/23).
+Resolves [#24 Keepalive and reconnect spec: keep the socket warm through idle](https://github.com/Snehit70/vidyut/issues/24)
+on the [Seamless Sync map](https://github.com/Snehit70/vidyut/issues/23).
 
 ## Goal
 
@@ -11,7 +11,7 @@ delivery by next reconnect/wake while dozing**.
 
 ## Grounding
 
-- **Phone-survival measurements ([#26](https://github.com/Snehit70/imagesync/issues/26)):**
+- **Phone-survival measurements ([#26](https://github.com/Snehit70/vidyut/issues/26)):**
   the failure mode is **freeze, not flap**. MIUI froze the whole app process after
   28 idle minutes at baseline (no self-recovery possible — a frozen process runs no
   timers); after lock-in-recents + hibernation off, the same socket survived 67+

@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/pairing/pairing_code.dart';
+import 'package:vidyut/src/pairing/pairing_code.dart';
 
 void main() {
   test('parses the relay QR pairing code', () {
     const raw =
-        '{"v":1,"service":"imagesync","host":"192.168.1.10","port":17321,"secret":"pairing-secret"}';
+        '{"v":1,"service":"vidyut","host":"192.168.1.10","port":17321,"secret":"pairing-secret"}';
 
     final pairing = PairingCode.parse(raw);
 

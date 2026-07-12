@@ -1,4 +1,4 @@
-group = "dev.snehit.imagesync.clipboard_autosend"
+group = "dev.snehit.vidyut.clipboard_autosend"
 version = "1.0-SNAPSHOT"
 
 buildscript {
@@ -26,7 +26,7 @@ plugins {
 }
 
 android {
-    namespace = "dev.snehit.imagesync.clipboard_autosend"
+    namespace = "dev.snehit.vidyut.clipboard_autosend"
 
     compileSdk = 36
 

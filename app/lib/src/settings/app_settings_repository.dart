@@ -40,15 +40,15 @@ class AppSettingsRepository {
   const AppSettingsRepository(this._storage);
 
   static const _showReceiveNotificationsKey =
-      'imagesync.settings.showReceiveNotifications';
+      'vidyut.settings.showReceiveNotifications';
   static const _showPersistentSendNotificationKey =
-      'imagesync.settings.showPersistentSendNotification';
+      'vidyut.settings.showPersistentSendNotification';
   static const _autoPushScreenshotsKey =
-      'imagesync.settings.autoPushScreenshots';
+      'vidyut.settings.autoPushScreenshots';
   static const _enableClipboardAutoSendKey =
-      'imagesync.settings.enableClipboardAutoSend';
+      'vidyut.settings.enableClipboardAutoSend';
   static const _miuiClipboardHintShownKey =
-      'imagesync.settings.miuiClipboardHintShown';
+      'vidyut.settings.miuiClipboardHintShown';
 
   final AppSettingsStorage _storage;
 
@@ -104,7 +104,7 @@ class AppSettingsRepository {
   }
 
   static const _onboardingCompleteKey =
-      'imagesync.settings.onboardingComplete';
+      'vidyut.settings.onboardingComplete';
 
   /// Whether the first-run wizard has been completed (onboarding spec D1).
   /// Kept out of [AppSettings] like the hint flag: it is written from its own
@@ -121,7 +121,7 @@ class AppSettingsRepository {
   }
 
   static String _miuiFlagKey(MiuiSetupFlag flag) =>
-      'imagesync.settings.miuiSetup.${flag.name}';
+      'vidyut.settings.miuiSetup.${flag.name}';
 
   /// Self-reported MIUI setup checkboxes (onboarding spec D5). Stored per
   /// item so the service isolate can un-check just the clipboard one on a

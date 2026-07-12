@@ -1,7 +1,7 @@
 import type { PayloadFrame, PayloadMetadata } from "./wire";
 
 const textEncoder = new TextEncoder();
-const kdfSalt = textEncoder.encode("imagesync-v1-pairing-secret");
+const kdfSalt = textEncoder.encode("vidyut-v1-pairing-secret");
 const kdfIterations = 200_000;
 
 export async function encryptPayload(

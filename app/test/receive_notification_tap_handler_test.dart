@@ -2,16 +2,16 @@ import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/receive/payload_receiver.dart';
-import 'package:imagesync/src/receive/receive_notification_tap_handler.dart';
-import 'package:imagesync/src/receive/received_image_repository.dart';
-import 'package:imagesync/src/receive/received_text_repository.dart';
+import 'package:vidyut/src/receive/payload_receiver.dart';
+import 'package:vidyut/src/receive/receive_notification_tap_handler.dart';
+import 'package:vidyut/src/receive/received_image_repository.dart';
+import 'package:vidyut/src/receive/received_text_repository.dart';
 
 void main() {
   late Directory tempDir;
 
   setUp(() async {
-    tempDir = await Directory.systemTemp.createTemp('imagesync_tap_test');
+    tempDir = await Directory.systemTemp.createTemp('vidyut_tap_test');
   });
 
   tearDown(() async {

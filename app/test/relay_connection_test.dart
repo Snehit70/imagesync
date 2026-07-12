@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/pairing/pairing_code.dart';
-import 'package:imagesync/src/shared/relay_connection.dart';
-import 'package:imagesync/src/shared/wire.dart';
+import 'package:vidyut/src/pairing/pairing_code.dart';
+import 'package:vidyut/src/shared/relay_connection.dart';
+import 'package:vidyut/src/shared/wire.dart';
 
 void main() {
   test('authenticates after the relay hello challenge', () async {

@@ -5,10 +5,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:screenshot_observer/screenshot_observer.dart';
 
-import 'package:imagesync/src/pairing/pairing_code.dart';
-import 'package:imagesync/src/push/screenshot_push_controller.dart';
-import 'package:imagesync/src/shared/payload_crypto.dart';
-import 'package:imagesync/src/shared/relay_connection.dart';
+import 'package:vidyut/src/pairing/pairing_code.dart';
+import 'package:vidyut/src/push/screenshot_push_controller.dart';
+import 'package:vidyut/src/shared/payload_crypto.dart';
+import 'package:vidyut/src/shared/relay_connection.dart';
 
 void main() {
   test('publishes a screenshot end to end and clears the slot on ack',

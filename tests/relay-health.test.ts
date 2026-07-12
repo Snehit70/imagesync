@@ -83,7 +83,7 @@ describe("relay /health", () => {
   test("other paths still answer with the banner", async () => {
     await withRelay(async (relay) => {
       const response = await fetch(relay.url.replace("ws://", "http://"));
-      expect(await response.text()).toBe("ImageSync relay");
+      expect(await response.text()).toBe("Vidyut relay");
     });
   });
 });

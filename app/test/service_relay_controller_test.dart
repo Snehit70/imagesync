@@ -6,17 +6,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:screenshot_observer/screenshot_observer.dart';
 
-import 'package:imagesync/src/foreground/service_relay_controller.dart';
-import 'package:imagesync/src/pairing/pairing_code.dart';
-import 'package:imagesync/src/push/screenshot_push_controller.dart';
-import 'package:imagesync/src/receive/payload_receiver.dart';
-import 'package:imagesync/src/receive/received_image_repository.dart';
-import 'package:imagesync/src/receive/received_text_repository.dart';
-import 'package:imagesync/src/settings/app_settings.dart';
-import 'package:imagesync/src/share/share_publisher.dart';
-import 'package:imagesync/src/shared/payload_crypto.dart';
-import 'package:imagesync/src/shared/relay_connection.dart';
-import 'package:imagesync/src/shared/wire.dart';
+import 'package:vidyut/src/foreground/service_relay_controller.dart';
+import 'package:vidyut/src/pairing/pairing_code.dart';
+import 'package:vidyut/src/push/screenshot_push_controller.dart';
+import 'package:vidyut/src/receive/payload_receiver.dart';
+import 'package:vidyut/src/receive/received_image_repository.dart';
+import 'package:vidyut/src/receive/received_text_repository.dart';
+import 'package:vidyut/src/settings/app_settings.dart';
+import 'package:vidyut/src/share/share_publisher.dart';
+import 'package:vidyut/src/shared/payload_crypto.dart';
+import 'package:vidyut/src/shared/relay_connection.dart';
+import 'package:vidyut/src/shared/wire.dart';
 
 void main() {
   const pairing = PairingCode(
@@ -35,7 +35,7 @@ void main() {
       {'kind': 'log', 'message': 'No pairing stored; staying offline.', 'error': false},
       {'kind': 'status', 'status': 'offline'},
     ]);
-    expect(harness.notifications.single.title, 'ImageSync offline');
+    expect(harness.notifications.single.title, 'Vidyut offline');
   });
 
   test('connects, forwards status, and updates the notification', () async {
@@ -63,7 +63,7 @@ void main() {
     );
     expect(
       harness.notifications.map((n) => n.title),
-      contains('ImageSync connected'),
+      contains('Vidyut connected'),
     );
   });
 
@@ -972,7 +972,7 @@ class _Harness {
         receivedImageRepository: ReceivedImageRepository(
           MemoryReceivedPayloadStorage(),
           directoryProvider: () async =>
-              Directory.systemTemp.createTemp('imagesync_relay_test'),
+              Directory.systemTemp.createTemp('vidyut_relay_test'),
         ),
       ),
       emit: emitted.add,

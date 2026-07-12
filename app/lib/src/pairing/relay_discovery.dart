@@ -40,7 +40,7 @@ abstract interface class MulticastLock {
 class ChannelMulticastLock implements MulticastLock {
   const ChannelMulticastLock();
 
-  static const _channel = MethodChannel('imagesync/multicast');
+  static const _channel = MethodChannel('vidyut/multicast');
 
   @override
   Future<void> acquire() async {
@@ -58,7 +58,7 @@ class RelayDiscovery {
     : _createClient = createClient ?? MDnsClient.new,
       _lock = lock; // ignore: prefer_initializing_formals
 
-  static const serviceName = '_imagesync._tcp.local';
+  static const serviceName = '_vidyut._tcp.local';
 
   final MDnsClient Function() _createClient;
   final MulticastLock? _lock;

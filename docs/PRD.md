@@ -1,4 +1,4 @@
-# PRD: ImageSync v1
+# PRD: Vidyut v1
 
 > Status: ready-for-agent
 > Scope: first shippable version — laptop (Linux/Wayland) ↔ Android phone clipboard
@@ -25,7 +25,7 @@ the same WiFi:
   images/text automatically; it writes incoming payloads straight into the
   clipboard.
 - The **phone** runs a Flutter app. Because Android forbids background clipboard
-  reads, the phone publishes via **share-sheet push** (Share → ImageSync, one tap)
+  reads, the phone publishes via **share-sheet push** (Share → Vidyut, one tap)
   and receives automatically: an incoming payload raises a notification that, when
   tapped, loads the payload into the phone's clipboard, ready to paste.
 - **Pairing** is one QR scan; discovery is automatic via mDNS with a manual-IP
@@ -57,8 +57,8 @@ Latest write wins. There is no history.
 15. As a user, I want only the latest payload to matter, so that I never wade through history.
 
 ### Phone → laptop (share-sheet push)
-16. As a user, I want ImageSync to appear in the Android share sheet for images, so that I can push a screenshot in one tap.
-17. As a user, I want ImageSync to appear in the share sheet for text, so that I can push a selected link or snippet.
+16. As a user, I want Vidyut to appear in the Android share sheet for images, so that I can push a screenshot in one tap.
+17. As a user, I want Vidyut to appear in the share sheet for text, so that I can push a selected link or snippet.
 18. As a user, I want a shared payload to land in my laptop clipboard automatically, so that I can paste it without touching the laptop app.
 19. As a user, I want a clear success/failure indication after sharing, so that I know whether it synced.
 
@@ -94,7 +94,7 @@ conversation); modules described by responsibility.
 ### Relay (Bun daemon, laptop)
 - Single Bun process that (a) hosts the WebSocket relay, (b) runs a **clipboard
   watcher** using `wl-paste --watch` for event-driven change detection, (c) runs a
-  **clipboard writer** using `wl-copy`, (d) advertises via mDNS `_imagesync._tcp`,
+  **clipboard writer** using `wl-copy`, (d) advertises via mDNS `_vidyut._tcp`,
   (e) generates and displays the pairing QR + secret.
 - Ships as a compiled single binary via `bun build --compile`.
 - Holds exactly one payload in memory (the pool). Latest write wins by timestamp.

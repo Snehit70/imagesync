@@ -1,11 +1,11 @@
 # Spec: Screenshot observer — MediaStore ContentObserver in the foreground service
 
-Status: locked (resolves [#27](https://github.com/Snehit70/imagesync/issues/27)).
+Status: locked (resolves [#27](https://github.com/Snehit70/vidyut/issues/27)).
 Research basis: `docs/research/android-seamless-sync.md` Q1.
 Scope boundary: this spec ends at a **screenshot event delivered to the service isolate's Dart
 side**. Reading bytes, encrypting, and publishing is the pipeline spec
-([#28](https://github.com/Snehit70/imagesync/issues/28)). Permission *UX* (screens, copy, when to
-prompt) is the onboarding spec ([#30](https://github.com/Snehit70/imagesync/issues/30)); this spec
+([#28](https://github.com/Snehit70/vidyut/issues/28)). Permission *UX* (screens, copy, when to
+prompt) is the onboarding spec ([#30](https://github.com/Snehit70/vidyut/issues/30)); this spec
 defines the grant states and detection logic that flow consumes.
 
 ## 1. Mechanism and ownership
@@ -39,7 +39,7 @@ defines the grant states and detection logic that flow consumes.
 
 **Decision: a dedicated `HandlerThread`, not the main looper.**
 
-- `start` creates and starts `HandlerThread("imagesync-screenshot-observer")`; the
+- `start` creates and starts `HandlerThread("vidyut-screenshot-observer")`; the
   `ContentObserver(Handler(thread.looper))` receives `onChange` on that thread, and the follow-up
   MediaStore query runs there too — never on the main thread (the service process also renders UI
   when the activity is open; queries during MIUI indexing bursts must not jank it).
@@ -56,11 +56,11 @@ defines the grant states and detection logic that flow consumes.
 
 Two channels, names namespaced like the existing ones:
 
-- `MethodChannel imagesync/screenshot_observer`
+- `MethodChannel vidyut/screenshot_observer`
   - `start()` — begin watching. Errors with `no-permission` if the full grant (§5) is absent.
   - `stop()` — stop watching, release the thread.
   - `accessLevel()` — returns `"full" | "partial" | "denied"` (§5 detection).
-- `EventChannel imagesync/screenshot_events` — stream of screenshot events:
+- `EventChannel vidyut/screenshot_events` — stream of screenshot events:
 
 ```json
 {
@@ -197,7 +197,7 @@ measurement (screenshot → laptop clipboard) is defined in the pipeline spec (#
 - Screenshots taken while the service is dead are never auto-pushed (watermark, no catch-up scan);
   the share sheet is the documented fallback.
 - If MIUI freezes the process (no autostart / battery restrictions), the observer silently stops
-  with it — survival setup is [#26](https://github.com/Snehit70/imagesync/issues/26)'s territory.
+  with it — survival setup is [#26](https://github.com/Snehit70/vidyut/issues/26)'s territory.
 - MIUI indexing lag can push detection past 2s occasionally; the map's success bar is measured
   screen-on on a set-up device, and the 30s window ensures late-indexed rows are still caught.
 - OEMs whose screenshot folder is neither named "Screenshots" nor names files `Screenshot_*` will

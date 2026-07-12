@@ -11,7 +11,7 @@ describe("pairing code", () => {
 
     expect(JSON.parse(code.raw)).toEqual({
       v: 1,
-      service: "imagesync",
+      service: "vidyut",
       host: "192.168.1.10",
       port: 17321,
       secret: "secret",

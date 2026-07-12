@@ -4,7 +4,7 @@
 *.pem
 .env
 .env.*
-imagesync.config.json
+vidyut.config.json
 pairing.json
 
 # --- Bun / Node (relay) ---
@@ -16,7 +16,7 @@ build/
 .DS_Store
 
 # Compiled relay binary
-relay/imagesync-relay
+relay/vidyut-relay
 relay/*.bin
 
 # --- Flutter / Dart (app) ---

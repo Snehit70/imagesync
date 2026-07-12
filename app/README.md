@@ -1,17 +1,22 @@
-# imagesync
+# Vidyut (Flutter app)
 
-A new Flutter project.
+The Android side of Vidyut — see the [repo root README](../README.md) for what
+Vidyut is, and [`docs/SETUP.md`](../docs/SETUP.md) for the new-user setup guide.
 
-## Getting Started
+## Development
 
-This project is a starting point for a Flutter application.
+```bash
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --debug
+# output: build/app/outputs/flutter-apk/app-debug.apk
+```
 
-A few resources to get you started if this is your first Flutter project:
+CI pins Flutter `3.44.4` (`stable` channel) — see `.github/workflows/ci.yml`.
+Install Flutter via the [official install guide](https://docs.flutter.dev/get-started/install)
+if you don't already have it.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+The design source of truth is `lib/src/design/` (`palette.dart`, `theme.dart`,
+`motion.dart`, `widgets.dart`); the local plugins in `packages/` (`vidyut_clipboard`,
+`screenshot_observer`, `clipboard_autosend`) host the native Android channels.

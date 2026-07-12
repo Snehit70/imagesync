@@ -27,8 +27,8 @@ class PairingCode {
     if (decoded is! Map<String, Object?>) {
       throw const PairingCodeException('Pairing code must be a JSON object.');
     }
-    if (decoded['v'] != 1 || decoded['service'] != 'imagesync') {
-      throw const PairingCodeException('Pairing code is not for ImageSync.');
+    if (decoded['v'] != 1 || decoded['service'] != 'vidyut') {
+      throw const PairingCodeException('Pairing code is not for Vidyut.');
     }
 
     final host = decoded['host'];

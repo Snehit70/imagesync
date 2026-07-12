@@ -15,7 +15,7 @@ export interface PairingCode {
 export function createPairingCode(options: PairingCodeOptions): PairingCode {
   const raw = JSON.stringify({
     v: 1,
-    service: "imagesync",
+    service: "vidyut",
     host: options.host,
     port: options.port,
     secret: options.pairingSecret,

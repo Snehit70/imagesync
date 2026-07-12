@@ -42,7 +42,7 @@ class MemoryLastActivityStorage implements LastActivityStorage {
 class LastActivityRepository {
   const LastActivityRepository(this._storage);
 
-  static const _key = 'imagesync.activity.last';
+  static const _key = 'vidyut.activity.last';
 
   final LastActivityStorage _storage;
 

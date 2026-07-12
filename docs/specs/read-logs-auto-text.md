@@ -1,6 +1,6 @@
 # Opt-in READ_LOGS auto-text mode
 
-Spec for Seamless Sync ticket [#31](https://github.com/Snehit70/imagesync/issues/31).
+Spec for Seamless Sync ticket [#31](https://github.com/Snehit70/vidyut/issues/31).
 Research basis: [`docs/research/android-seamless-sync.md`](../research/android-seamless-sync.md) Q2
 (AOSP `ClipboardService` read gate; KDE Connect's shipped READ_LOGS recipe).
 
@@ -26,7 +26,7 @@ it, and is the only stock-ish option that stays zero-tap; the default IME path i
 non-starter and AccessibilityService can't read arbitrary clipboard (both rejected in
 research Q2).
 
-Today ImageSync already has the *manual* version of the trick: `SendClipboardScreen`
+Today Vidyut already has the *manual* version of the trick: `SendClipboardScreen`
 (`app/lib/src/foreground/send_clipboard_screen.dart`) works precisely because it runs in
 `MainActivity` — an Activity with focus — so `Clipboard.getData` is permitted. The
 auto-mode is "do that read, invisibly, the instant something is copied, without the user
@@ -151,13 +151,13 @@ A new **Advanced → Clipboard auto-send** screen, reached from Settings, gated 
 - live grant state: `READ_LOGS granted` vs. `not granted — run the setup below`
   (`checkSelfPermission(READ_LOGS)`), re-checked on each return-to-foreground since the
   grant is external;
-- the exact copy-paste commands, with a copy button, for **`dev.snehit.imagesync.imagesync`**
+- the exact copy-paste commands, with a copy button, for **`dev.snehit.vidyut.vidyut`**
   (the app's `applicationId`):
 
   ```
-  adb -d shell pm grant dev.snehit.imagesync.imagesync android.permission.READ_LOGS
-  adb -d shell appops set dev.snehit.imagesync.imagesync SYSTEM_ALERT_WINDOW allow
-  adb -d shell am force-stop dev.snehit.imagesync.imagesync
+  adb -d shell pm grant dev.snehit.vidyut.vidyut android.permission.READ_LOGS
+  adb -d shell appops set dev.snehit.vidyut.vidyut SYSTEM_ALERT_WINDOW allow
+  adb -d shell am force-stop dev.snehit.vidyut.vidyut
   ```
 
 - the MIUI caveat line from D5.
@@ -217,7 +217,7 @@ the fragile pieces are diagnosable on the real device without new tooling:
 
 - Implementation — a later effort executes this plan (map is plan-only).
 - MIUI deep-link onboarding for background-activity-start / draw-over-other-apps toggles —
-  [Onboarding and permissions flow (#30)](https://github.com/Snehit70/imagesync/issues/30).
+  [Onboarding and permissions flow (#30)](https://github.com/Snehit70/vidyut/issues/30).
 - Screenshot (#27/#28) and receive (#29) paths — their own specs.
 - Default-IME and AccessibilityService clipboard reading — rejected in research Q2.
 - Latency measurement methodology against the ≤2s bar — the relay-observability spec (#25)

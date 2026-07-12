@@ -33,8 +33,8 @@ abstract interface class ClipboardAutoSendWatcher {
   Stream<String> get diagnostics;
 }
 
-/// [ClipboardAutoSendWatcher] backed by the `imagesync/clipboard_autosend`
-/// method channel and the `imagesync/clipboard_autosend_events` event channel.
+/// [ClipboardAutoSendWatcher] backed by the `vidyut/clipboard_autosend`
+/// method channel and the `vidyut/clipboard_autosend_events` event channel.
 class ChannelClipboardAutoSendWatcher implements ClipboardAutoSendWatcher {
   ChannelClipboardAutoSendWatcher({
     MethodChannel? methodChannel,
@@ -43,10 +43,10 @@ class ChannelClipboardAutoSendWatcher implements ClipboardAutoSendWatcher {
        _eventChannel = eventChannel ?? defaultEventChannel;
 
   static const defaultMethodChannel = MethodChannel(
-    'imagesync/clipboard_autosend',
+    'vidyut/clipboard_autosend',
   );
   static const defaultEventChannel = EventChannel(
-    'imagesync/clipboard_autosend_events',
+    'vidyut/clipboard_autosend_events',
   );
 
   final MethodChannel _methodChannel;

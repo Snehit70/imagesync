@@ -20,35 +20,35 @@ class FakeMdnsResponder implements MdnsResponder {
 }
 
 describe("mDNS advertisement", () => {
-  test("responds with ImageSync service records", () => {
+  test("responds with Vidyut service records", () => {
     const responder = new FakeMdnsResponder();
     const stop = startMdnsAdvertisement({
       responder,
-      instanceName: "ImageSync Laptop",
-      hostName: "imagesync-laptop",
+      instanceName: "Vidyut Laptop",
+      hostName: "vidyut-laptop",
       port: 17321,
       addresses: ["192.168.1.10"],
     });
 
     responder.queryHandler?.({
-      questions: [{ name: "_imagesync._tcp.local", type: "PTR" }],
+      questions: [{ name: "_vidyut._tcp.local", type: "PTR" }],
     });
 
     expect(responder.responses.at(-1)).toEqual([
-      { name: "_imagesync._tcp.local", type: "PTR", ttl: 120, data: "ImageSync Laptop._imagesync._tcp.local" },
+      { name: "_vidyut._tcp.local", type: "PTR", ttl: 120, data: "Vidyut Laptop._vidyut._tcp.local" },
       {
-        name: "ImageSync Laptop._imagesync._tcp.local",
+        name: "Vidyut Laptop._vidyut._tcp.local",
         type: "SRV",
         ttl: 120,
-        data: { priority: 0, weight: 0, port: 17321, target: "imagesync-laptop.local" },
+        data: { priority: 0, weight: 0, port: 17321, target: "vidyut-laptop.local" },
       },
       {
-        name: "ImageSync Laptop._imagesync._tcp.local",
+        name: "Vidyut Laptop._vidyut._tcp.local",
         type: "TXT",
         ttl: 120,
-        data: ["v=1", "service=imagesync"],
+        data: ["v=1", "service=vidyut"],
       },
-      { name: "imagesync-laptop.local", type: "A", ttl: 120, data: "192.168.1.10" },
+      { name: "vidyut-laptop.local", type: "A", ttl: 120, data: "192.168.1.10" },
     ]);
 
     stop();
@@ -59,8 +59,8 @@ describe("mDNS advertisement", () => {
     const responder = new FakeMdnsResponder();
     startMdnsAdvertisement({
       responder,
-      instanceName: "ImageSync Laptop",
-      hostName: "imagesync-laptop",
+      instanceName: "Vidyut Laptop",
+      hostName: "vidyut-laptop",
       port: 17321,
       addresses: ["192.168.1.10"],
     });

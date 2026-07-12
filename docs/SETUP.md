@@ -1,6 +1,6 @@
 # Setup Guide (New Users)
 
-ImageSync gives your **Linux/Wayland laptop** and your **Android phone** one shared
+Vidyut gives your **Linux/Wayland laptop** and your **Android phone** one shared
 clipboard on the same WiFi. Copy a screenshot or some text on one device, paste it on
 the other a second later. Everything is end-to-end encrypted and never leaves your LAN.
 
@@ -47,18 +47,18 @@ From the repo root:
 bun run install:relay
 ```
 
-This compiles `dist/imagesync-relay`, installs it to `~/.local/bin/`, installs the
+This compiles `dist/vidyut-relay`, installs it to `~/.local/bin/`, installs the
 systemd user unit, and starts the service. It is tied to `graphical-session.target`, so
 it comes up with your desktop and stops when you log out.
 
 ### 3. Get your pairing details
 
-On first start the relay creates `~/.config/imagesync/relay.json` (mode 600) with a
+On first start the relay creates `~/.config/vidyut/relay.json` (mode 600) with a
 persistent pairing secret, then prints a QR code and a manual fallback line to the
 journal:
 
 ```bash
-journalctl --user -u imagesync-relay -b --no-pager | tail -40
+journalctl --user -u vidyut-relay -b --no-pager | tail -40
 ```
 
 You'll see a QR code and a line like:
@@ -81,7 +81,8 @@ pair once.
 
 There is no Play Store build (v1 ships a debug APK). Get the APK one of two ways:
 
-- **Build it** (needs Flutter + Android SDK):
+- **Build it** (needs [Flutter](https://docs.flutter.dev/get-started/install)
+  `3.44.4`+ stable and the Android SDK — see `app/README.md` for dev setup):
 
   ```bash
   cd app && flutter build apk --debug
@@ -98,7 +99,7 @@ adb install -r app/build/app/outputs/flutter-apk/app-debug.apk
 
 ### 2. Run the first-run wizard
 
-Open ImageSync. A one-time wizard walks you through the permissions in order and ends at
+Open Vidyut. A one-time wizard walks you through the permissions in order and ends at
 pairing. Grant everything it asks for — each grant removes a rough edge:
 
 | Grant | Why it matters |
@@ -111,7 +112,7 @@ pairing. Grant everything it asks for — each grant removes a rough edge:
 On **Xiaomi / MIUI / HyperOS** phones there are extra switches the app can't toggle for
 you — the wizard (and the Setup status screen) list them with a shortcut button:
 
-- **Autostart** — let ImageSync restart itself after MIUI kills it.
+- **Autostart** — let Vidyut restart itself after MIUI kills it.
 - **Battery: No restrictions** — pick "No restrictions" on the battery-saver page.
 - **Lock in recents** — keep the app from being swiped away by task cleanup.
 - **Clipboard permission** — allow clipboard access via the permission editor.
@@ -123,7 +124,7 @@ You can revisit all of this any time at **Settings → Setup status**, which sho
 
 On the pairing screen, pick whichever is easiest:
 
-- **Auto-discover (recommended):** the app browses for `_imagesync._tcp` on the LAN and
+- **Auto-discover (recommended):** the app browses for `_vidyut._tcp` on the LAN and
   lists nearby relays. Tap yours — host and port fill in automatically, so you only type
   the secret.
 - **Scan the QR** shown in the laptop journal.

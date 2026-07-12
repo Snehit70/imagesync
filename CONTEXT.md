@@ -1,4 +1,4 @@
-# ImageSync
+# Vidyut
 
 A personal utility that keeps a single shared clipboard "pool" in sync across a
 user's Linux laptop and Android phone on the same WiFi network, so an image
@@ -36,7 +36,7 @@ _Avoid_: onboarding, registration
 **Share-sheet push**:
 The phone-to-relay path. Because Android forbids background clipboard reads,
 the phone publishes a payload only when the user explicitly shares content
-(e.g. a screenshot) into ImageSync via the Android share sheet.
+(e.g. a screenshot) into Vidyut via the Android share sheet.
 _Avoid_: upload, send
 
 **Forget this laptop**:

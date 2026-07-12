@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const methodChannel = MethodChannel('imagesync/clipboard_autosend');
+  const methodChannel = MethodChannel('vidyut/clipboard_autosend');
 
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger

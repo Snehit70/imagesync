@@ -4,6 +4,20 @@ Field-verified fixes from real debugging sessions on the owner's setup (Fedora +
 Hyprland laptop, Xiaomi HyperOS phone). Symptom → cause → fix. Add new entries
 as they are diagnosed; only record what was actually reproduced and fixed.
 
+## Contents
+
+- [Phone: tapping "Send clipboard" on the notification does nothing](#phone-tapping-send-clipboard-on-the-notification-does-nothing)
+- [Phone: send screen says "Clipboard is empty" when launched from the notification](#phone-send-screen-says-clipboard-is-empty-when-launched-from-the-notification)
+- [Phone: connection silently dies after ~30 minutes idle and never recovers](#phone-connection-silently-dies-after-30-minutes-idle-and-never-recovers)
+- [Phone: notification button semantics (for future debugging)](#phone-notification-button-semantics-for-future-debugging)
+- [Laptop: relay changes don't show up after `systemctl --user restart`](#laptop-relay-changes-dont-show-up-after-systemctl---user-restart)
+- [Held screenshot lost after the relay restarts (`payload_stale_dropped`)](#held-screenshot-lost-after-the-relay-restarts-payload_stale_dropped)
+- [Laptop: `clipboard_write` logs seconds after the payload arrived, acks stall](#laptop-clipboard_write-logs-seconds-after-the-payload-arrived-acks-stall)
+- [Laptop: image is on the clipboard but Ctrl+V pastes nothing](#laptop-image-is-on-the-clipboard-but-ctrlv-pastes-nothing)
+- [Laptop: did the payload even arrive? The relay logs nothing](#laptop-did-the-payload-even-arrive-the-relay-logs-nothing)
+- [Dashboard/relay "bytes" is larger than the text you copied (+17 for text)](#dashboardrelay-bytes-is-larger-than-the-text-you-copied-17-for-text)
+- [Phone: stuck on "Searching" after a laptop reboot — service isolate wedged](#phone-stuck-on-searching-after-a-laptop-reboot--service-isolate-wedged)
+
 ## Phone: tapping "Send clipboard" on the notification does nothing
 
 **Symptom:** The notification button gives no visible reaction. Opening the app
@@ -16,7 +30,7 @@ background-start gate on top. Verified in logcat at the moment of the tap:
 
 ```
 NotificationService: Indirect notification activity start (trampoline)
-                     from dev.snehit.imagesync.imagesync blocked
+                     from dev.snehit.vidyut.vidyut blocked
 ActivityTaskManager: Abort background activity starts from 10388
 ```
 
@@ -28,10 +42,10 @@ activity starts. Two parts:
    otherwise the app never appears in the overlay-permission settings list and
    `adb shell appops set ... SYSTEM_ALERT_WINDOW allow` silently stays
    `default` on MIUI.
-2. Grant it: Settings → Apps → ImageSync → "Display over other apps" → Allow
+2. Grant it: Settings → Apps → Vidyut → "Display over other apps" → Allow
    (open the page directly with `adb shell am start -a
    android.settings.action.MANAGE_OVERLAY_PERMISSION -d
-   package:dev.snehit.imagesync.imagesync`).
+   package:dev.snehit.vidyut.vidyut`).
 
 **Dead end, recorded to save the next hour:** MIUI's Other-permissions toggle
 "Open new windows while running in the background" did **not** lift the block —
@@ -68,7 +82,7 @@ network. A frozen process can't run reconnect timers, so client-side recovery
 logic is powerless. Measured 2026-07-10: kill at 28 idle minutes *despite*
 Battery saver already set to "No restrictions".
 
-**Fix:** **Lock the app in recents** (open recents, pull the ImageSync card
+**Fix:** **Lock the app in recents** (open recents, pull the Vidyut card
 down until the padlock shows). This was the decisive lever: same socket
 survived 67+ minutes with zero drops afterwards. Supporting toggles: Battery
 saver "No restrictions", app hibernation ("Pause app activity if unused") off.
@@ -89,19 +103,19 @@ Connect uses) is the documented fallback.
 **Symptom:** Rebuilt the relay (`bun run build:relay`), restarted the service,
 but new behavior/log events don't appear.
 
-**Cause:** The systemd unit runs `%h/.local/bin/imagesync-relay`, not the repo's
-`dist/imagesync-relay`. A rebuild only updates `dist/`; restarting relaunches
+**Cause:** The systemd unit runs `%h/.local/bin/vidyut-relay`, not the repo's
+`dist/vidyut-relay`. A rebuild only updates `dist/`; restarting relaunches
 the stale installed copy.
 
-**Fix (verified 2026-07-10):** `install -m 755 dist/imagesync-relay
-~/.local/bin/imagesync-relay` (or the full `bun run install:relay`), *then*
+**Fix (verified 2026-07-10):** `install -m 755 dist/vidyut-relay
+~/.local/bin/vidyut-relay` (or the full `bun run install:relay`), *then*
 restart the service.
 
 **Mirror trap (verified 2026-07-11):** `bun run install:relay` alone is not
 enough either — the script ends with `systemctl --user enable --now`, which is
 a no-op when the service is already running, so the old process keeps serving
 the stale binary (check: the PID in `journalctl` output doesn't change). Always
-follow an install with an explicit `systemctl --user restart imagesync-relay`.
+follow an install with an explicit `systemctl --user restart vidyut-relay`.
 The phone drops with wsCode 1006 and auto-reconnects within the backoff window.
 
 ## Held screenshot lost after the relay restarts (`payload_stale_dropped`)
@@ -236,8 +250,8 @@ disables that rescue too.
 
 **Fix (verified 2026-07-12):** Kill and relaunch the app — the wedged state is
 process-local. Via adb: `adb shell am force-stop
-dev.snehit.imagesync.imagesync && adb shell am start -n
-dev.snehit.imagesync.imagesync/.MainActivity`; on the phone: App info → Force
+dev.snehit.vidyut.vidyut && adb shell am start -n
+dev.snehit.vidyut.vidyut/.MainActivity`; on the phone: App info → Force
 stop, then reopen. Reconnection after the fresh start was immediate
 (`device_connected` → `auth_ok` in 132ms, pool replay `recipients:1`, live
 laptop→phone text landed). The Settings "Sync with laptop" off/on toggle is

@@ -50,8 +50,8 @@ const stopClipboard = options.clipboard
     })
   : () => undefined;
 const stopMdns = startMdnsAdvertisement({
-  instanceName: "ImageSync Relay",
-  hostName: hostname().replace(/[^a-zA-Z0-9-]/g, "-") || "imagesync-relay",
+  instanceName: "Vidyut Relay",
+  hostName: hostname().replace(/[^a-zA-Z0-9-]/g, "-") || "vidyut-relay",
   port,
   addresses: getLanIPv4Addresses(),
 });
@@ -63,7 +63,7 @@ const pairingCode = createPairingCode({
 });
 
 logger.info("relay_started", { url: relay.url, maxPayloadBytes, clipboard: options.clipboard });
-console.log("ImageSync pairing code:");
+console.log("Vidyut pairing code:");
 console.log(pairingCode.qr);
 console.log(pairingCode.raw);
 console.log("Manual entry: %s", pairingCode.manual);
@@ -81,7 +81,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 function parseArgs(args: string[]): CliOptions {
   const options: CliOptions = {
     host: "0.0.0.0",
-    configPath: join(homedir(), ".config", "imagesync", "relay.json"),
+    configPath: join(homedir(), ".config", "vidyut", "relay.json"),
     clipboard: true,
   };
 
@@ -128,7 +128,7 @@ function parsePositiveInteger(flag: string, value: string): number {
 }
 
 function printHelpAndExit(): never {
-  console.log(`Usage: imagesync-relay [options]
+  console.log(`Usage: vidyut-relay [options]
 
 Options:
   --host <host>                 Host to bind (default: 0.0.0.0)

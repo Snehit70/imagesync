@@ -15,7 +15,7 @@ import 'src/design/theme.dart';
 import 'src/design/widgets.dart';
 import 'src/foreground/foreground_service_client.dart';
 import 'src/foreground/foreground_service_coordinator.dart';
-import 'src/foreground/imagesync_foreground_service.dart';
+import 'src/foreground/vidyut_foreground_service.dart';
 import 'src/foreground/send_clipboard_screen.dart';
 import 'src/onboarding/onboarding_wizard.dart';
 import 'src/onboarding/setup_actions.dart';
@@ -47,14 +47,14 @@ void main() {
   Cryptography.instance = FlutterCryptography.defaultInstance;
   FlutterForegroundTask.initCommunicationPort();
   runApp(
-    ImageSyncApp(
+    VidyutApp(
       appSettingsRepository: AppSettingsRepository(
         const SecureAppSettingsStorage(),
       ),
       lastActivityRepository: const LastActivityRepository(
         SecureLastActivityStorage(),
       ),
-      foregroundServiceClient: ImageSyncForegroundServiceClient(),
+      foregroundServiceClient: VidyutForegroundServiceClient(),
       pairingRepository: PairingRepository(const SecurePairingStorage()),
       relayDiscovery: RelayDiscovery(lock: const ChannelMulticastLock()),
       shareSource: const ReceiveSharingIntentSource(),
@@ -73,8 +73,8 @@ void main() {
   );
 }
 
-class ImageSyncApp extends StatelessWidget {
-  const ImageSyncApp({
+class VidyutApp extends StatelessWidget {
+  const VidyutApp({
     super.key,
     required this.appSettingsRepository,
     required this.lastActivityRepository,
@@ -106,8 +106,8 @@ class ImageSyncApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ImageSync',
-      theme: buildImageSyncTheme(),
+      title: 'Vidyut',
+      theme: buildVidyutTheme(),
       onGenerateRoute: (settings) {
         final connectionFactory =
             relayConnectionFactory ?? _defaultRelayConnection;
@@ -504,7 +504,7 @@ class _PairingScreenState extends State<PairingScreen>
     } on PairingCodeException catch (error) {
       setState(() => _error = error.message);
     } on FormatException {
-      setState(() => _error = 'QR code is not a valid ImageSync pairing code.');
+      setState(() => _error = 'QR code is not a valid Vidyut pairing code.');
     }
   }
 
@@ -595,7 +595,7 @@ class _PairingScreenState extends State<PairingScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('ImageSync'),
+        title: const Text('Vidyut'),
         actions: [
           _AppBarAction(
             tooltip: 'Settings',

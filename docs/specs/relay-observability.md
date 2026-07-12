@@ -1,7 +1,7 @@
 # Relay connection observability spec
 
-Resolves [#25 Relay connection observability spec](https://github.com/Snehit70/imagesync/issues/25) on the
-[Seamless Sync plan](https://github.com/Snehit70/imagesync/issues/23) map.
+Resolves [#25 Relay connection observability spec](https://github.com/Snehit70/vidyut/issues/25) on the
+[Seamless Sync plan](https://github.com/Snehit70/vidyut/issues/23) map.
 
 ## Goal
 

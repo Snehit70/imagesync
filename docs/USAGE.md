@@ -1,6 +1,6 @@
-# Using ImageSync Day to Day
+# Using Vidyut Day to Day
 
-Once you've paired (see [`SETUP.md`](SETUP.md)), ImageSync fades into the background.
+Once you've paired (see [`SETUP.md`](SETUP.md)), Vidyut fades into the background.
 This is what it's like to actually live with it.
 
 ## The mental model
@@ -51,7 +51,7 @@ take is pushed to the laptop clipboard on its own. Take the shot, switch to the 
 
 For any image or text, use Android's share sheet:
 
-> **Share → ImageSync**
+> **Share → Vidyut**
 
 The item is pushed to the laptop clipboard and you get a success/failure indication. This
 is the universal path — it works for a photo, a selected link, a snippet, anything

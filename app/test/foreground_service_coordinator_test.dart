@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:imagesync/src/foreground/foreground_service_client.dart';
-import 'package:imagesync/src/foreground/foreground_service_coordinator.dart';
-import 'package:imagesync/src/pairing/pairing_code.dart';
-import 'package:imagesync/src/settings/app_settings.dart';
+import 'package:vidyut/src/foreground/foreground_service_client.dart';
+import 'package:vidyut/src/foreground/foreground_service_coordinator.dart';
+import 'package:vidyut/src/pairing/pairing_code.dart';
+import 'package:vidyut/src/settings/app_settings.dart';
 
 void main() {
   test('starts the foreground notification when paired and enabled', () async {

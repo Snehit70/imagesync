@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<paths>
-    <!-- Matches the directory ReceivedImageRepository writes under the app
-         support (files) dir; only this subtree is exposed via content URIs. -->
-    <files-path name="imagesync_received" path="imagesync_received/" />
-</paths>

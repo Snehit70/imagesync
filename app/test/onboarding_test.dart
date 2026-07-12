@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:screenshot_observer/screenshot_observer.dart';
 
-import 'package:imagesync/src/design/motion.dart';
-import 'package:imagesync/src/onboarding/onboarding_wizard.dart';
-import 'package:imagesync/src/onboarding/setup_actions.dart';
-import 'package:imagesync/src/onboarding/setup_checklist_screen.dart';
-import 'package:imagesync/src/onboarding/setup_status.dart';
-import 'package:imagesync/src/pairing/pairing_code.dart';
-import 'package:imagesync/src/pairing/pairing_repository.dart';
-import 'package:imagesync/src/settings/app_settings.dart';
-import 'package:imagesync/src/settings/app_settings_repository.dart';
+import 'package:vidyut/src/design/motion.dart';
+import 'package:vidyut/src/onboarding/onboarding_wizard.dart';
+import 'package:vidyut/src/onboarding/setup_actions.dart';
+import 'package:vidyut/src/onboarding/setup_checklist_screen.dart';
+import 'package:vidyut/src/onboarding/setup_status.dart';
+import 'package:vidyut/src/pairing/pairing_code.dart';
+import 'package:vidyut/src/pairing/pairing_repository.dart';
+import 'package:vidyut/src/settings/app_settings.dart';
+import 'package:vidyut/src/settings/app_settings_repository.dart';
 
 class FakeSetupActions implements SetupActions {
   bool notifications = false;

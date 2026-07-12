@@ -98,7 +98,7 @@ class _SetupChecklistScreenState extends State<SetupChecklistScreen>
                   ok: status.batteryExempt,
                   title: 'Battery exemption',
                   detail: status.batteryExempt
-                      ? 'ImageSync stays connected while the phone sleeps.'
+                      ? 'Vidyut stays connected while the phone sleeps.'
                       : 'Sync may pause when the phone sleeps.',
                   actionLabel: status.batteryExempt ? null : 'Allow',
                   onAction: widget.loader.actions.requestBatteryExemption,

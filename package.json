@@ -1,12 +1,12 @@
 {
-  "name": "imagesync",
+  "name": "vidyut",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "build:relay": "bun build ./src/relay/cli.ts --compile --outfile dist/imagesync-relay",
+    "build:relay": "bun build ./src/relay/cli.ts --compile --outfile dist/vidyut-relay",
     "install:relay": "bash scripts/install-relay.sh"
   },
   "devDependencies": {

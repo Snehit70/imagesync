@@ -12,6 +12,7 @@ class FakeRunner implements ProcessRunner {
   outputs = new Map<string, Uint8Array>();
   exitCodes = new Map<string, number>();
   onWatchChange: (() => void | Promise<void>) | undefined;
+  onWatchExit: ((result: { exitCode: number; stdout: Uint8Array; stderr: string }) => void) | undefined;
 
   async run(command: string, args: string[], input?: Uint8Array, options?: RunOptions) {
     this.calls.push({ command, args, ...(input && { input }), ...(options && { options }) });
@@ -23,11 +24,18 @@ class FakeRunner implements ProcessRunner {
     };
   }
 
-  watch(command: string, args: string[], onChange: () => void | Promise<void>) {
+  watch(
+    command: string,
+    args: string[],
+    onChange: () => void | Promise<void>,
+    onExit?: (result: { exitCode: number; stdout: Uint8Array; stderr: string }) => void,
+  ) {
     this.watches.push({ command, args });
     this.onWatchChange = onChange;
+    this.onWatchExit = onExit;
     return () => {
       this.onWatchChange = undefined;
+      this.onWatchExit = undefined;
     };
   }
 }
@@ -126,14 +134,18 @@ describe("Wayland clipboard adapter", () => {
     const runner = new FakeRunner();
     const clipboard = createWaylandClipboardAdapter(runner);
     let changes = 0;
+    let ready = false;
 
     const stop = clipboard.watch(() => {
       changes += 1;
+    }, () => {
+      ready = true;
     });
     // wl-paste --watch emits once for the pre-existing selection on startup;
     // that fire must not count as a change.
     await runner.onWatchChange?.();
     expect(changes).toBe(0);
+    expect(ready).toBeTrue();
     // Every subsequent fire is a real clipboard change.
     await runner.onWatchChange?.();
     await runner.onWatchChange?.();
@@ -147,6 +159,29 @@ describe("Wayland clipboard adapter", () => {
     ]);
     expect(changes).toBe(2);
     expect(runner.onWatchChange).toBeUndefined();
+  });
+
+  test("surfaces an incompatible compositor when wl-paste watch exits", () => {
+    const runner = new FakeRunner();
+    const clipboard = createWaylandClipboardAdapter(runner);
+    let failure: Error | undefined;
+
+    clipboard.watch(
+      () => undefined,
+      undefined,
+      (error) => {
+        failure = error;
+      },
+    );
+    runner.onWatchExit?.({
+      exitCode: 1,
+      stdout: new Uint8Array(),
+      stderr: "Watch mode requires a compositor that supports the wlroots data-control protocol\n",
+    });
+
+    expect(failure?.message).toBe(
+      "wl-paste --watch failed: Watch mode requires a compositor that supports the wlroots data-control protocol",
+    );
   });
 });
 
@@ -174,5 +209,16 @@ describe("BunProcessRunner", () => {
 
     expect(result.exitCode).toBe(3);
     expect(result.stderr.trim()).toBe("boom");
+  });
+
+  test("watch reports an unexpected child exit with stderr", async () => {
+    const runner = new BunProcessRunner();
+
+    const result = await new Promise<{ exitCode: number; stdout: Uint8Array; stderr: string }>((resolve) => {
+      runner.watch("sh", ["-c", "echo unsupported >&2; exit 7"], () => undefined, resolve);
+    });
+
+    expect(result.exitCode).toBe(7);
+    expect(result.stderr.trim()).toBe("unsupported");
   });
 });

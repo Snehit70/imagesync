@@ -25,13 +25,22 @@ export interface RunOptions {
 
 export interface ProcessRunner {
   run(command: string, args: string[], input?: Uint8Array, options?: RunOptions): Promise<ProcessResult>;
-  watch(command: string, args: string[], onChange: () => void | Promise<void>): () => void;
+  watch(
+    command: string,
+    args: string[],
+    onChange: () => void | Promise<void>,
+    onExit?: (result: ProcessResult) => void,
+  ): () => void;
 }
 
 export interface ClipboardAdapter {
   read(): Promise<ClipboardPayload | undefined>;
   write(payload: ClipboardPayload): Promise<void>;
-  watch(onChange: () => void | Promise<void>): () => void;
+  watch(
+    onChange: () => void | Promise<void>,
+    onReady?: () => void,
+    onFailure?: (error: Error) => void,
+  ): () => void;
 }
 
 const supportedMimeTypes: Array<{ mime: string; type: PayloadType }> = [
@@ -73,7 +82,7 @@ export function createWaylandClipboardAdapter(runner: ProcessRunner = new BunPro
       });
       ensureProcessOk(result, `wl-copy --type ${mime}`);
     },
-    watch(onChange) {
+    watch(onChange, onReady, onFailure) {
       // wl-paste --watch fires once immediately for the selection that already
       // exists when the relay starts. That startup fire is not a user action:
       // publishing it re-stamps stale clipboard content with a fresh now()
@@ -81,13 +90,22 @@ export function createWaylandClipboardAdapter(runner: ProcessRunner = new BunPro
       // relay was down and makes the pool drop it as stale (offline-hold,
       // E2E §10). Swallow the first fire; every later one is a real change.
       let primed = false;
-      return runner.watch("wl-paste", ["--watch", "sh", "-c", "printf changed"], () => {
-        if (!primed) {
-          primed = true;
-          return;
-        }
-        return onChange();
-      });
+      return runner.watch(
+        "wl-paste",
+        ["--watch", "sh", "-c", "printf changed"],
+        () => {
+          if (!primed) {
+            primed = true;
+            onReady?.();
+            return;
+          }
+          return onChange();
+        },
+        (result) => {
+          const detail = result.stderr.trim() || `exit ${result.exitCode}`;
+          onFailure?.(new Error(`wl-paste --watch failed: ${detail}`));
+        },
+      );
     },
   };
 }
@@ -161,13 +179,19 @@ export class BunProcessRunner implements ProcessRunner {
     };
   }
 
-  watch(command: string, args: string[], onChange: () => void | Promise<void>): () => void {
+  watch(
+    command: string,
+    args: string[],
+    onChange: () => void | Promise<void>,
+    onExit?: (result: ProcessResult) => void,
+  ): () => void {
     const child = spawn([command, ...args], {
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
     });
     const reader = child.stdout.getReader();
+    const stderr = new Response(child.stderr).text();
     let stopped = false;
 
     void (async () => {
@@ -176,6 +200,15 @@ export class BunProcessRunner implements ProcessRunner {
         if (chunk.done) return;
         await onChange();
       }
+    })();
+    void (async () => {
+      const [exitCode, errorOutput] = await Promise.all([child.exited, stderr]);
+      if (stopped) return;
+      onExit?.({
+        exitCode,
+        stdout: new Uint8Array(),
+        stderr: errorOutput,
+      });
     })();
 
     return () => {

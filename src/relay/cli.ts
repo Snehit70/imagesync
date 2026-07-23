@@ -2,7 +2,7 @@
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { createWaylandClipboardAdapter } from "./clipboard";
-import { startClipboardSync } from "./clipboard-sync";
+import { startClipboardSync, type ClipboardHealth } from "./clipboard-sync";
 import { loadOrCreateRelayConfig, type LogLevel } from "./config";
 import { createLogger } from "./logger";
 import { startMdnsAdvertisement } from "./mdns";
@@ -31,12 +31,16 @@ const pairingHost = getPairingHost(host);
 
 await ensurePortFree(host, port);
 
+let clipboardHealth: ClipboardHealth = options.clipboard
+  ? { enabled: true, status: "starting", watcher: "wl-paste --watch" }
+  : { enabled: false, status: "disabled" };
 const relay = await createRelay({
   hostname: host,
   port,
   pairingSecret: config.pairingSecret,
   maxPayloadBytes,
   logger,
+  clipboardHealth: () => clipboardHealth,
 });
 
 const stopClipboard = options.clipboard
@@ -47,6 +51,9 @@ const stopClipboard = options.clipboard
       origin: config.deviceId,
       now: Date.now,
       logger,
+      onHealthChange: (health) => {
+        clipboardHealth = health;
+      },
     })
   : () => undefined;
 const stopMdns = startMdnsAdvertisement({

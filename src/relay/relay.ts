@@ -2,6 +2,7 @@ import { verifyPairingProof } from "../shared/auth";
 import { noopLogger, type Logger } from "./logger";
 import { PayloadPool } from "./payload-pool";
 import { encodedPayloadBytes, isPayloadFrame, type PayloadFrame, type RelayMessage } from "../shared/wire";
+import type { ClipboardHealth } from "./clipboard-sync";
 
 interface RelayOptions {
   hostname: string;
@@ -12,6 +13,7 @@ interface RelayOptions {
   heartbeatIntervalMs?: number;
   staleAfterMs?: number;
   logger?: Logger;
+  clipboardHealth?: () => ClipboardHealth;
 }
 
 const defaultHeartbeatIntervalMs = 30_000;
@@ -95,7 +97,7 @@ export async function createRelay(options: RelayOptions): Promise<RelayHandle> {
         return undefined;
       }
       if (new URL(request.url).pathname === "/health") {
-        return Response.json(healthSnapshot(startedAt, devices, pool.current));
+        return Response.json(healthSnapshot(startedAt, devices, pool.current, options.clipboardHealth?.()));
       }
       return new Response("Vidyut relay", { status: 200 });
     },
@@ -228,11 +230,13 @@ function healthSnapshot(
   startedAt: number,
   devices: Set<RelaySocket>,
   currentPayload: PayloadFrame | undefined,
+  clipboard?: ClipboardHealth,
 ): Record<string, unknown> {
   const now = Date.now();
   return {
-    status: "ok",
+    status: clipboard?.status === "degraded" ? "degraded" : "ok",
     uptimeSeconds: Math.floor((now - startedAt) / 1000),
+    ...(clipboard && { clipboard }),
     devices: [...devices]
       .filter((socket) => socket.data.authenticated)
       .map((socket) => ({

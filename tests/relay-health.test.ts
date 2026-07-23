@@ -86,4 +86,33 @@ describe("relay /health", () => {
       expect(await response.text()).toBe("Vidyut relay");
     });
   });
+
+  test("reports degraded while the network relay remains available when clipboard watch fails", async () => {
+    const relay = await createRelay({
+      hostname: "127.0.0.1",
+      port: 0,
+      pairingSecret: secret,
+      maxPayloadBytes: 1024 * 1024,
+      clipboardHealth: () => ({
+        enabled: true,
+        status: "degraded",
+        watcher: "wl-paste --watch",
+        error: "wl-paste --watch failed: unsupported protocol",
+      }),
+    });
+    try {
+      const health = await fetchHealth(relay);
+
+      expect(health.status).toBe("degraded");
+      expect(health.clipboard).toEqual({
+        enabled: true,
+        status: "degraded",
+        watcher: "wl-paste --watch",
+        error: "wl-paste --watch failed: unsupported protocol",
+      });
+      expect(await (await fetch(relay.url.replace("ws://", "http://"))).text()).toBe("Vidyut relay");
+    } finally {
+      await relay.stop();
+    }
+  });
 });

@@ -5,12 +5,19 @@ The relay is a single compiled binary that runs on the Linux/Wayland laptop, wat
 ## Prerequisites
 
 - A **Wayland session** — the relay reads and writes the clipboard through `wl-copy`/`wl-paste`, so it does not work on X11 or headless machines.
-- **wl-clipboard** — provides `wl-copy` and `wl-paste`:
+- **wl-clipboard 2.3+** — provides `wl-copy` and `wl-paste`. Version 2.3 added
+  `ext-data-control-v1`, which is required for clipboard watching on KDE/KWin:
 
   ```bash
   sudo dnf install wl-clipboard      # Fedora
   sudo apt install wl-clipboard      # Debian/Ubuntu
+  wl-paste --version                 # must report 2.3+ for KDE/KWin
   ```
+
+  Some distribution repositories still contain 2.2.1. If so, install 2.3+
+  manually from the
+  [upstream wl-clipboard release](https://github.com/bugaevc/wl-clipboard/releases/tag/v2.3.0).
+  Vidyut does not download, build, or replace this system dependency.
 
 - **Bun** (build only) — the binary is compiled from source with [Bun](https://bun.sh). Once installed, the service does not need Bun.
 
@@ -58,5 +65,10 @@ After pulling changes, re-run `bun run install:relay` to rebuild, reinstall, and
 ## Troubleshooting
 
 - **`wl-copy` errors / clipboard not syncing**: the service can't see your Wayland display. GNOME and KDE import `WAYLAND_DISPLAY` into the systemd user environment automatically; on other compositors (e.g. sway) run `systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP` from your session startup, then restart the service.
+- **KDE/KWin reports degraded clipboard health**: check
+  `curl -sS http://127.0.0.1:17321/health` and
+  `journalctl --user -u vidyut-relay -b -o cat | grep clipboard_watch`.
+  `wl-clipboard` 2.2.1 cannot watch KWin's standardized data-control protocol;
+  install 2.3+ manually, then restart the relay.
 - **Port already in use**: the relay refuses to start if its port (default `17321`) is taken. Change `port` in `~/.config/vidyut/relay.json` and restart.
 - **Phone can't discover the relay**: the relay advertises `_vidyut._tcp` over mDNS. Make sure the laptop firewall allows mDNS (UDP 5353) and the relay port on your LAN zone, and that both devices are on the same network.

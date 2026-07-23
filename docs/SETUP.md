@@ -31,8 +31,12 @@ sudo dnf install wl-clipboard ImageMagick      # Fedora
 sudo apt install wl-clipboard imagemagick      # Debian/Ubuntu
 ```
 
-- **wl-clipboard** (`wl-copy`/`wl-paste`) is required — the relay reads and writes the
-  clipboard through it.
+- **wl-clipboard 2.3+** (`wl-copy`/`wl-paste`) is required — the relay reads and
+  writes the clipboard through it. Version 2.3 added the standardized
+  `ext-data-control-v1` protocol used by KDE/KWin. Some distributions still
+  package 2.2.1; check with `wl-paste --version` and install 2.3+ manually from
+  the [upstream release](https://github.com/bugaevc/wl-clipboard/releases/tag/v2.3.0)
+  when needed. Vidyut does not replace the distribution package automatically.
 - **ImageMagick** (`magick`) is recommended — phone screenshots often arrive as JPEG,
   and most Linux apps only paste `image/png`. The relay re-encodes to PNG when
   ImageMagick is present. Without it, screenshots may land on the clipboard but refuse

@@ -14,6 +14,7 @@ as they are diagnosed; only record what was actually reproduced and fixed.
 - [Held screenshot lost after the relay restarts (`payload_stale_dropped`)](#held-screenshot-lost-after-the-relay-restarts-payload_stale_dropped)
 - [Laptop: `clipboard_write` logs seconds after the payload arrived, acks stall](#laptop-clipboard_write-logs-seconds-after-the-payload-arrived-acks-stall)
 - [Laptop: image is on the clipboard but Ctrl+V pastes nothing](#laptop-image-is-on-the-clipboard-but-ctrlv-pastes-nothing)
+- [Laptop → phone never publishes on KDE/KWin](#laptop--phone-never-publishes-on-kdekwin)
 - [Laptop: did the payload even arrive? The relay logs nothing](#laptop-did-the-payload-even-arrive-the-relay-logs-nothing)
 - [Dashboard/relay "bytes" is larger than the text you copied (+17 for text)](#dashboardrelay-bytes-is-larger-than-the-text-you-copied-17-for-text)
 - [Phone: stuck on "Searching" after a laptop reboot — service isolate wedged](#phone-stuck-on-searching-after-a-laptop-reboot--service-isolate-wedged)
@@ -178,11 +179,27 @@ ImageMagick (`magick - png:-`) before the clipboard write and offers
 this against the 2s screen-on bar. Requires `ImageMagick` installed on the
 laptop.
 
+## Laptop → phone never publishes on KDE/KWin
+
+**Symptom:** the phone is connected and phone → laptop payloads work, but
+laptop copies never produce `clipboard_published`. `/health` reports
+`status:"degraded"` with a failed `wl-paste --watch` clipboard watcher.
+
+**Cause (verified 2026-07-23 on Fedora 43, KWin 6.6.5):** `wl-clipboard` 2.2.1
+only watches through the wlroots data-control protocol. KWin exposes the
+standardized `ext-data-control-v1` protocol instead, so the watcher exits
+immediately. `wl-clipboard` 2.3 added support for KWin's protocol.
+
+**Fix:** check `wl-paste --version` and manually install
+[wl-clipboard 2.3+](https://github.com/bugaevc/wl-clipboard/releases/tag/v2.3.0)
+when the distribution package is older, then restart `vidyut-relay`. Vidyut
+does not replace system packages itself. The relay now logs
+`clipboard_watch_failed` and exposes the exact failure under `/health` instead
+of silently claiming clipboard sync is enabled.
+
 ## Laptop: did the payload even arrive? The relay logs nothing
 
-Until the observability work package (WP1, `docs/specs/relay-observability.md`)
-lands, the relay logs nothing after startup — no connect/auth/payload events.
-Interim diagnosis tools:
+Use these diagnosis tools:
 
 - One-curl overview: `curl http://localhost:17321/health` — uptime, authenticated
   devices (with last-seen age), and current pool payload identity/age.

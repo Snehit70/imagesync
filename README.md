@@ -27,7 +27,8 @@ The rest of this file is the developer-facing quickstart.
 ## Relay Prerequisites
 
 - Linux Wayland session
-- `wl-clipboard` installed (`wl-copy` and `wl-paste`)
+- `wl-clipboard` 2.3+ installed (`wl-copy` and `wl-paste`; 2.3 adds KDE/KWin
+  `ext-data-control-v1` support)
 - Bun 1.3.3 for development
 
 ## Run The Relay
